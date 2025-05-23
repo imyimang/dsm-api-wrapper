@@ -253,6 +253,50 @@ def debug_headers():
             "error": str(e)
         }), 500
 
+@auth_bp.route('/debug/session/test', methods=['POST'])
+def debug_session_test():
+    """除錯：測試 Flask session 設置"""
+    try:
+        # 強制設置一個測試 session
+        test_data = {
+            'test_key': 'test_value',
+            'timestamp': time.time(),
+            'count': flask_session.get('count', 0) + 1
+        }
+        
+        flask_session['test_data'] = test_data
+        flask_session['count'] = test_data['count']
+        flask_session.permanent = True
+        
+        # 立即檢查是否設置成功
+        verification = flask_session.get('test_data')
+        
+        nas_service.debug_log("Session 測試", {
+            "test_data_set": test_data,
+            "verification": verification,
+            "session_keys": list(flask_session.keys()),
+            "session_permanent": flask_session.permanent
+        })
+        
+        return jsonify({
+            "success": True,
+            "message": "Session 測試完成",
+            "debug_info": {
+                "test_data_set": test_data,
+                "verification_success": bool(verification),
+                "session_keys": list(flask_session.keys()),
+                "session_permanent": flask_session.permanent,
+                "app_secret_key_exists": bool(app.secret_key) if 'app' in globals() else 'unknown'
+            }
+        })
+    except Exception as e:
+        nas_service.debug_log("Session 測試錯誤", str(e))
+        return jsonify({
+            "success": False,
+            "error": str(e),
+            "message": "Session 測試失敗"
+        }), 500
+
 @auth_bp.route('/session/check/token', methods=['GET'])
 def api_check_session_token():
     """檢查 token session 狀態"""

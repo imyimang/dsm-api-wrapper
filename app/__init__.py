@@ -9,11 +9,18 @@ from flask_cors import CORS
 from .config import Config
 from .routes import auth_bp, file_bp, system_bp
 import os
+from datetime import timedelta
 
 def create_app(config_class=Config):
     """應用程式工廠函數"""
     app = Flask(__name__)
     app.config.from_object(config_class)
+    
+    # 🔥 關鍵修復：確保 Flask session 正確配置
+    app.secret_key = app.config['SECRET_KEY']
+    app.config['SESSION_TYPE'] = 'filesystem'
+    app.config['SESSION_PERMANENT'] = True
+    app.config['PERMANENT_SESSION_LIFETIME'] = timedelta(seconds=app.config['PERMANENT_SESSION_LIFETIME'])
     
     # 確保 session 配置正確
     app.config['SESSION_COOKIE_SECURE'] = False  # 開發環境不使用 HTTPS
@@ -21,6 +28,7 @@ def create_app(config_class=Config):
     # app.config['SESSION_COOKIE_SAMESITE'] = 'Lax'  # 註解掉：移除 SameSite 限制以支援跨域
     app.config['SESSION_COOKIE_DOMAIN'] = None  # 明確設為 None
     app.config['SESSION_COOKIE_PATH'] = '/'  # 明確設置路徑
+    app.config['SESSION_COOKIE_NAME'] = 'session'  # 明確設置 cookie 名稱
     
     # 方法 1: 使用 flask-cors (開發環境設定)
     CORS(app, 
