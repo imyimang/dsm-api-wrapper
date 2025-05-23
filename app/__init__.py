@@ -4,7 +4,7 @@
 Flask 應用程式初始化模組
 """
 
-from flask import Flask, jsonify, send_from_directory, redirect, url_for
+from flask import Flask, jsonify, send_from_directory, redirect, url_for, request
 from flask_cors import CORS
 from .config import Config
 from .routes import auth_bp, file_bp, system_bp
@@ -15,8 +15,30 @@ def create_app(config_class=Config):
     app = Flask(__name__)
     app.config.from_object(config_class)
     
-    # 啟用CORS
-    CORS(app)
+    # 確保 session 配置正確
+    app.config['SESSION_COOKIE_SECURE'] = False  # 開發環境不使用 HTTPS
+    app.config['SESSION_COOKIE_HTTPONLY'] = True
+    app.config['SESSION_COOKIE_SAMESITE'] = 'Lax'
+    
+    # 啟用CORS，並配置支持 credentials
+    CORS(app, 
+         supports_credentials=True,
+         origins=['http://localhost:3000', 'http://localhost:5000', 'http://127.0.0.1:3000', 'http://127.0.0.1:5000'],
+         allow_headers=['Content-Type', 'Authorization', 'X-Requested-With'],
+         expose_headers=['Access-Control-Allow-Credentials'],
+         methods=['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS'])
+    
+    # 自定義 CORS 標頭處理
+    @app.after_request
+    def after_request(response):
+        """確保每個回應都包含正確的 CORS 標頭"""
+        origin = request.headers.get('Origin')
+        if origin in ['http://localhost:3000', 'http://localhost:5000', 'http://127.0.0.1:3000', 'http://127.0.0.1:5000']:
+            response.headers['Access-Control-Allow-Origin'] = origin
+        response.headers['Access-Control-Allow-Credentials'] = 'true'
+        response.headers['Access-Control-Allow-Methods'] = 'GET, POST, PUT, DELETE, OPTIONS'
+        response.headers['Access-Control-Allow-Headers'] = 'Content-Type, Authorization, X-Requested-With'
+        return response
     
     # 註冊藍圖
     app.register_blueprint(auth_bp)

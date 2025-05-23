@@ -20,8 +20,18 @@ def get_nas_session():
     if not session_data:
         return None
     
+    # 恢復實例狀態
     nas_service.sid = session_data.get('sid')
     nas_service.syno_token = session_data.get('syno_token')
+    
+    # 添加調試資訊
+    nas_service.debug_log("恢復session狀態", {
+        "sid_exists": bool(nas_service.sid),
+        "syno_token_exists": bool(nas_service.syno_token),
+        "sid_preview": nas_service.sid[:8] + "..." if nas_service.sid else None,
+        "syno_token_preview": nas_service.syno_token[:8] + "..." if nas_service.syno_token else None
+    })
+    
     return nas_service
 
 @auth_bp.route('/login', methods=['POST'])
@@ -84,12 +94,25 @@ def api_logout():
 def api_check_session():
     """檢查session狀態"""
     try:
+        # 首先檢查 Flask session 中是否有資料
+        session_data = flask_session.get('nas_session')
+        nas_service.debug_log("檢查Flask session", {
+            "session_exists": bool(session_data),
+            "session_keys": list(session_data.keys()) if session_data else None
+        })
+        
         service = get_nas_session()
         if not service:
+            nas_service.debug_log("無法獲取NAS service實例")
             return jsonify({
                 "success": False,
                 "message": "未登入"
             }), 401
+        
+        nas_service.debug_log("開始驗證session有效性", {
+            "sid_exists": bool(service.sid),
+            "syno_token_exists": bool(service.syno_token)
+        })
         
         is_logged_in = service.is_logged_in()
         
@@ -97,6 +120,10 @@ def api_check_session():
             session_data = flask_session.get('nas_session')
             login_time = session_data.get('login_time', time.time())
             elapsed_time = time.time() - login_time
+            
+            nas_service.debug_log("Session驗證成功", {
+                "elapsed_hours": round(elapsed_time / 3600, 1)
+            })
             
             return jsonify({
                 "success": True,
@@ -108,6 +135,7 @@ def api_check_session():
                 }
             })
         else:
+            nas_service.debug_log("Session驗證失敗，清除Flask session")
             flask_session.pop('nas_session', None)
             return jsonify({
                 "success": False,
@@ -115,6 +143,7 @@ def api_check_session():
                 "data": {"valid": False}
             }), 401
     except Exception as e:
+        nas_service.debug_log("Session檢查發生錯誤", str(e))
         return jsonify({
             "success": False,
             "message": f"檢查session失敗：{str(e)}"

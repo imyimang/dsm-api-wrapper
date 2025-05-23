@@ -185,8 +185,42 @@ class NASApiService:
             logger.error(f"登出錯誤: {str(e)}")
     
     def is_logged_in(self):
-        """檢查是否已登入"""
-        return bool(self.syno_token and self.sid)
+        """檢查是否已登入並驗證session有效性"""
+        if not (self.syno_token and self.sid):
+            return False
+        
+        try:
+            # 使用簡單的API呼叫來驗證session是否有效
+            # 這裡我們使用 SYNO.API.Info 來檢查，這是最輕量的驗證方法
+            params = {
+                "api": "SYNO.API.Info",
+                "version": "1",
+                "method": "query",
+                "query": "SYNO.API.Auth",
+                "_sid": self.sid
+            }
+            
+            headers = {"X-SYNO-TOKEN": self.syno_token}
+            
+            response = self.client.get(self.base_url, params=params, headers=headers, timeout=5)
+            
+            # 如果收到401，表示session無效
+            if response.status_code == 401:
+                self.debug_log("Session驗證失敗 - 401 Unauthorized")
+                return False
+            
+            # 檢查回應是否成功
+            response_data = response.json()
+            if response_data.get("success"):
+                self.debug_log("Session驗證成功")
+                return True
+            else:
+                self.debug_log("Session驗證失敗", response_data)
+                return False
+                
+        except Exception as e:
+            self.debug_log("Session驗證出現錯誤", str(e))
+            return False
     
     def compress_files(self, source_paths, dest_path, options=None):
         """壓縮檔案或資料夾"""
