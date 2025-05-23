@@ -6,7 +6,8 @@
 
 - **Base URL**: `http://localhost:5000` (開發環境)
 - **Content-Type**: `application/json`
-- **認證方式**: Session-based (需先登入獲取 SID)
+- **認證方式**: Cookie-based Session (Flask Session)
+- **CORS**: 支援跨域請求，需設定 `credentials: 'include'`
 - **網頁應用**: `http://localhost:5000/app` (完整的 NAS 管理介面)
 
 ## 統一回應格式
@@ -28,18 +29,14 @@
 ```json
 {
   "success": false,
-  "message": "錯誤描述",
-  "error": {
-    "code": "ERROR_CODE",
-    "details": "詳細錯誤資訊"
-  }
+  "message": "錯誤描述"
 }
 ```
 
 ## 身份驗證端點
 
 ### POST /api/login
-登入 NAS 系統，獲取 Session ID
+登入 NAS 系統，建立 Flask Session
 
 **請求體:**
 ```json
@@ -61,10 +58,13 @@
 }
 ```
 
-**錯誤代碼:**
-- `INVALID_CREDENTIALS`: 帳號或密碼錯誤
-- `LOGIN_FAILED`: 登入失敗
-- `CONNECTION_ERROR`: 連線錯誤
+**錯誤範例:**
+```json
+{
+  "success": false,
+  "message": "登入失敗：帳號或密碼錯誤"
+}
+```
 
 ---
 
@@ -101,9 +101,26 @@
 ```json
 {
   "success": false,
-  "message": "Session無效或已過期",
+  "message": "Session已過期",
   "data": {
     "valid": false
+  }
+}
+```
+
+---
+
+### GET /api/debug/session
+除錯 Flask session 狀態 (開發用)
+
+**回應:**
+```json
+{
+  "success": true,
+  "debug_info": {
+    "flask_session_exists": true,
+    "flask_session_data": {...},
+    "nas_service_state": {...}
   }
 }
 ```
@@ -130,6 +147,7 @@ GET /api/files?path=/home/documents
       {
         "name": "example.txt",
         "isdir": false,
+        "path": "/home/documents/example.txt",
         "additional": {
           "size": 1024,
           "time": {
@@ -154,20 +172,14 @@ GET /api/files?path=/home/documents
             "group": "administrators",
             "uid": 1024,
             "gid": 100
-          }
-        }
-      },
-      {
-        "name": "folder",
-        "isdir": true,
-        "additional": {
-          "size": 0,
-          "time": {...},
-          "perm": {...},
-          "owner": {...}
+          },
+          "real_path": "/volume1/homes/admin/documents/example.txt",
+          "type": "TXT"
         }
       }
-    ]
+    ],
+    "offset": 0,
+    "total": 1
   }
 }
 ```
@@ -182,34 +194,37 @@ GET /api/files?path=/home/documents
 **表單欄位:**
 - `file`: 檔案物件 (必填)
 - `path` (選填): 目標路徑，預設為 `/home/www`
-- `overwrite` (選填): 是否覆蓋現有檔案 (true/false)，預設為 false
+- `overwrite` (選填): 是否覆蓋現有檔案 (true/false)，預設為 true
 
 **範例請求:**
 ```bash
 curl -X POST http://localhost:5000/api/upload \
   -F "file=@/path/to/local/file.txt" \
   -F "path=/home/documents" \
-  -F "overwrite=true"
+  -F "overwrite=true" \
+  -b cookies.txt
 ```
 
 **回應:**
 ```json
 {
   "success": true,
-  "message": "檔案上傳成功",
+  "message": "上傳成功",
   "data": {
-    "filename": "file.txt",
-    "path": "/home/documents/file.txt",
-    "size": 1024
+    "blSkip": false,
+    "file": "file.txt",
+    "pid": 12345
   }
 }
 ```
 
-**錯誤代碼:**
-- `NO_FILE`: 沒有提供檔案
-- `UPLOAD_FAILED`: 上傳失敗
-- `FILE_EXISTS`: 檔案已存在且未設定覆蓋
-- `PERMISSION_DENIED`: 權限不足
+**錯誤範例:**
+```json
+{
+  "success": false,
+  "message": "上傳失敗：沒有檔案"
+}
+```
 
 ---
 
@@ -233,11 +248,6 @@ curl -X POST http://localhost:5000/api/upload \
   }
 }
 ```
-
-**錯誤代碼:**
-- `INVALID_PATHS`: 路徑格式錯誤
-- `DELETE_FAILED`: 刪除失敗
-- `PERMISSION_DENIED`: 權限不足
 
 ---
 
@@ -338,11 +348,6 @@ GET /api/download?path=/home/documents/file.txt
 }
 ```
 
-**錯誤代碼:**
-- `FILE_NOT_FOUND`: 檔案不存在
-- `DOWNLOAD_FAILED`: 下載連結生成失敗
-- `PERMISSION_DENIED`: 權限不足
-
 ## 系統管理端點
 
 ### GET /api/tasks
@@ -422,61 +427,109 @@ GET /api/download?path=/home/documents/file.txt
 
 ## 錯誤處理
 
-### 常見錯誤代碼
+### 常見錯誤範例
 
-| 代碼 | 說明 | 解決方案 |
-|------|------|----------|
-| `AUTHENTICATION_REQUIRED` | 需要先登入 | 呼叫 `/api/login` 進行登入 |
-| `SESSION_EXPIRED` | Session 已過期 | 重新登入 |
-| `PERMISSION_DENIED` | 權限不足 | 檢查檔案/目錄權限 |
-| `FILE_NOT_FOUND` | 檔案不存在 | 確認檔案路徑正確 |
-| `INVALID_PATH` | 路徑格式錯誤 | 使用正確的絕對路徑格式 |
-| `QUOTA_EXCEEDED` | 儲存空間不足 | 清理空間或聯絡管理員 |
-| `OPERATION_TIMEOUT` | 操作逾時 | 重試操作或檢查網路連線 |
-
-### 錯誤回應範例
 ```json
 {
   "success": false,
-  "message": "檔案不存在",
-  "error": {
-    "code": "FILE_NOT_FOUND",
-    "details": "指定的檔案路徑 '/home/test.txt' 不存在",
-    "path": "/home/test.txt"
-  }
+  "message": "未登入"
+}
+```
+
+```json
+{
+  "success": false,
+  "message": "獲取檔案列表失敗：權限不足"
+}
+```
+
+```json
+{
+  "success": false,
+  "message": "上傳失敗：沒有檔案"
 }
 ```
 
 ## 使用範例
 
+### JavaScript 範例 (正確的 Cookie-based 認證)
+```javascript
+// 登入
+fetch('http://localhost:5000/api/login', {
+    method: 'POST',
+    credentials: 'include',  // 重要！必須設定
+    headers: {
+        'Content-Type': 'application/json',
+    },
+    body: JSON.stringify({
+        account: 'your_username',
+        password: 'your_password'
+    })
+})
+.then(response => response.json())
+.then(data => {
+    if (data.success) {
+        // 登入成功，後續請求會自動帶上 cookie
+        return fetch('http://localhost:5000/api/files', {
+            credentials: 'include'  // 必須設定
+        });
+    }
+});
+
+// 獲取檔案列表
+fetch('http://localhost:5000/api/files?path=/home', {
+    credentials: 'include'
+})
+.then(response => response.json())
+.then(data => console.log(data));
+
+// 上傳檔案
+const formData = new FormData();
+formData.append('file', fileInput.files[0]);
+formData.append('path', '/home/uploads');
+formData.append('overwrite', 'true');
+
+fetch('http://localhost:5000/api/upload', {
+    method: 'POST',
+    credentials: 'include',
+    body: formData
+})
+.then(response => response.json())
+.then(data => console.log(data));
+```
+
 ### Python 範例
 ```python
 import requests
+
+# 創建session以保持cookie
+session = requests.Session()
 
 # 登入
 login_data = {
     "account": "your_username", 
     "password": "your_password"
 }
-response = requests.post("http://localhost:5000/api/login", json=login_data)
-session = requests.Session()
+response = session.post("http://localhost:5000/api/login", json=login_data)
 
-# 獲取檔案列表
-files = session.get("http://localhost:5000/api/files?path=/home")
-print(files.json())
-
-# 上傳檔案
-with open("test.txt", "rb") as f:
-    upload_response = session.post(
-        "http://localhost:5000/api/upload",
-        files={"file": f},
-        data={"path": "/home/uploads"}
-    )
+if response.json()['success']:
+    # 獲取檔案列表
+    files = session.get("http://localhost:5000/api/files?path=/home")
+    print(files.json())
+    
+    # 上傳檔案
+    with open("test.txt", "rb") as f:
+        upload_response = session.post(
+            "http://localhost:5000/api/upload",
+            files={"file": f},
+            data={"path": "/home/uploads", "overwrite": "true"}
+        )
+    print(upload_response.json())
 ```
 
 ### cURL 範例
 ```bash
-# 登入
+# 登入並保存cookie
 curl -X POST http://localhost:5000/api/login \
   -H "Content-Type: application/json" \
   -d '{"account":"your_username","password":"your_password"}' \
@@ -490,5 +543,20 @@ curl -X GET "http://localhost:5000/api/files?path=/home" \
 curl -X POST http://localhost:5000/api/upload \
   -b cookies.txt \
   -F "file=@test.txt" \
-  -F "path=/home/uploads"
+  -F "path=/home/uploads" \
+  -F "overwrite=true"
+
+# 刪除檔案
+curl -X DELETE http://localhost:5000/api/delete \
+  -b cookies.txt \
+  -H "Content-Type: application/json" \
+  -d '{"paths":["/home/uploads/test.txt"]}'
 ```
+
+## 重要注意事項
+
+1. **認證方式**: 使用 Cookie-based Session，前端必須設定 `credentials: 'include'`
+2. **上傳檔案**: 預設 `overwrite=true`，會覆蓋同名檔案
+3. **檔案列表**: 回應包含 `offset` 和 `total` 欄位，支援分頁
+4. **錯誤處理**: 統一使用 `success` 和 `message` 欄位
+5. **路徑格式**: 使用絕對路徑，如 `/home/www/file.txt`
