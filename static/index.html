@@ -1,0 +1,996 @@
+<!DOCTYPE html>
+<html lang="zh-TW">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Synology NAS 管理系統</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            min-height: 100vh;
+            color: #333;
+        }
+
+        .container {
+            max-width: 1200px;
+            margin: 0 auto;
+            padding: 20px;
+        }
+
+        .header {
+            background: rgba(255, 255, 255, 0.95);
+            backdrop-filter: blur(10px);
+            border-radius: 15px;
+            padding: 20px;
+            margin-bottom: 20px;
+            box-shadow: 0 8px 32px rgba(0, 0, 0, 0.1);
+        }
+
+        .header h1 {
+            color: #4a5568;
+            text-align: center;
+            margin-bottom: 10px;
+        }
+
+        .status-bar {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            flex-wrap: wrap;
+            gap: 10px;
+        }
+
+        .login-section {
+            background: rgba(255, 255, 255, 0.95);
+            backdrop-filter: blur(10px);
+            border-radius: 15px;
+            padding: 40px;
+            box-shadow: 0 8px 32px rgba(0, 0, 0, 0.1);
+            max-width: 400px;
+            margin: 50px auto;
+        }
+
+        .main-content {
+            display: none;
+            background: rgba(255, 255, 255, 0.95);
+            backdrop-filter: blur(10px);
+            border-radius: 15px;
+            padding: 20px;
+            box-shadow: 0 8px 32px rgba(0, 0, 0, 0.1);
+        }
+
+        .form-group {
+            margin-bottom: 20px;
+        }
+
+        label {
+            display: block;
+            margin-bottom: 5px;
+            font-weight: 600;
+            color: #4a5568;
+        }
+
+        input[type="text"],
+        input[type="password"],
+        input[type="file"],
+        select {
+            width: 100%;
+            padding: 12px;
+            border: 2px solid #e2e8f0;
+            border-radius: 8px;
+            font-size: 16px;
+            transition: border-color 0.3s ease;
+        }
+
+        input[type="text"]:focus,
+        input[type="password"]:focus,
+        select:focus {
+            outline: none;
+            border-color: #667eea;
+        }
+
+        .btn {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+            padding: 12px 24px;
+            border: none;
+            border-radius: 8px;
+            cursor: pointer;
+            font-size: 16px;
+            font-weight: 600;
+            transition: transform 0.2s ease, box-shadow 0.2s ease;
+            margin-right: 10px;
+            margin-bottom: 10px;
+        }
+
+        .btn:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 4px 12px rgba(102, 126, 234, 0.4);
+        }
+
+        .btn-danger {
+            background: linear-gradient(135deg, #fc8181 0%, #f56565 100%);
+        }
+
+        .btn-success {
+            background: linear-gradient(135deg, #68d391 0%, #48bb78 100%);
+        }
+
+        .btn-secondary {
+            background: linear-gradient(135deg, #a0aec0 0%, #718096 100%);
+        }
+
+        .tabs {
+            display: flex;
+            margin-bottom: 20px;
+            background: #f7fafc;
+            border-radius: 10px;
+            padding: 5px;
+        }
+
+        .tab {
+            flex: 1;
+            padding: 12px;
+            text-align: center;
+            cursor: pointer;
+            border-radius: 8px;
+            transition: all 0.3s ease;
+            font-weight: 600;
+        }
+
+        .tab.active {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+        }
+
+        .tab-content {
+            display: none;
+        }
+
+        .tab-content.active {
+            display: block;
+        }
+
+        .file-list {
+            background: #f7fafc;
+            border-radius: 10px;
+            padding: 20px;
+            margin-top: 20px;
+        }
+
+        .file-item {
+            display: flex;
+            align-items: center;
+            padding: 12px;
+            margin-bottom: 8px;
+            background: white;
+            border-radius: 8px;
+            box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
+            transition: transform 0.2s ease;
+        }
+
+        .file-item:hover {
+            transform: translateX(5px);
+        }
+
+        .file-icon {
+            font-size: 24px;
+            margin-right: 15px;
+            width: 30px;
+        }
+
+        .file-info {
+            flex: 1;
+        }
+
+        .file-name {
+            font-weight: 600;
+            color: #2d3748;
+        }
+
+        .file-size {
+            font-size: 14px;
+            color: #718096;
+        }
+
+        .file-actions {
+            display: flex;
+            gap: 5px;
+        }
+
+        .btn-small {
+            padding: 6px 12px;
+            font-size: 14px;
+        }
+
+        .current-path {
+            background: #e2e8f0;
+            padding: 10px 15px;
+            border-radius: 8px;
+            margin-bottom: 15px;
+            font-family: monospace;
+            word-break: break-all;
+        }
+
+        .upload-area {
+            border: 2px dashed #cbd5e0;
+            border-radius: 10px;
+            padding: 40px;
+            text-align: center;
+            margin-bottom: 20px;
+            transition: border-color 0.3s ease;
+        }
+
+        .upload-area.drag-over {
+            border-color: #667eea;
+            background: rgba(102, 126, 234, 0.1);
+        }
+
+        .message {
+            padding: 15px;
+            border-radius: 8px;
+            margin-bottom: 15px;
+            font-weight: 600;
+        }
+
+        .message.success {
+            background: #c6f6d5;
+            color: #22543d;
+            border: 1px solid #9ae6b4;
+        }
+
+        .message.error {
+            background: #fed7d7;
+            color: #742a2a;
+            border: 1px solid #fc8181;
+        }
+
+        .message.info {
+            background: #bee3f8;
+            color: #2a4365;
+            border: 1px solid #90cdf4;
+        }
+
+        .loading {
+            display: inline-block;
+            width: 20px;
+            height: 20px;
+            border: 3px solid #f3f3f3;
+            border-top: 3px solid #667eea;
+            border-radius: 50%;
+            animation: spin 1s linear infinite;
+        }
+
+        @keyframes spin {
+            0% { transform: rotate(0deg); }
+            100% { transform: rotate(360deg); }
+        }
+
+        .hidden {
+            display: none !important;
+        }
+
+        .breadcrumb {
+            display: flex;
+            align-items: center;
+            margin-bottom: 15px;
+            flex-wrap: wrap;
+        }
+
+        .breadcrumb-item {
+            color: #667eea;
+            cursor: pointer;
+            padding: 5px 8px;
+            border-radius: 4px;
+            transition: background 0.2s ease;
+        }
+
+        .breadcrumb-item:hover {
+            background: rgba(102, 126, 234, 0.1);
+        }
+
+        .breadcrumb-separator {
+            margin: 0 5px;
+            color: #a0aec0;
+        }
+
+        @media (max-width: 768px) {
+            .container {
+                padding: 10px;
+            }
+
+            .status-bar {
+                flex-direction: column;
+                align-items: stretch;
+                text-align: center;
+            }
+
+            .tabs {
+                flex-direction: column;
+            }
+
+            .file-item {
+                flex-direction: column;
+                align-items: flex-start;
+            }
+
+            .file-actions {
+                margin-top: 10px;
+                width: 100%;
+                justify-content: flex-end;
+            }
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <!-- 登入區域 -->
+        <div id="loginSection" class="login-section">
+            <h2 style="text-align: center; margin-bottom: 30px; color: #4a5568;">
+                🔐 Synology NAS 登入
+            </h2>
+            <div id="loginMessage"></div>
+            <form id="loginForm">
+                <div class="form-group">
+                    <label for="username">帳號</label>
+                    <input type="text" id="username" required>
+                </div>
+                <div class="form-group">
+                    <label for="password">密碼</label>
+                    <input type="password" id="password" required>
+                </div>
+                <button type="submit" class="btn" style="width: 100%;">
+                    <span id="loginText">登入</span>
+                    <span id="loginLoading" class="loading hidden"></span>
+                </button>
+            </form>
+        </div>
+
+        <!-- 主要內容區域 -->
+        <div id="mainContent" class="main-content">
+            <!-- 頂部狀態列 -->
+            <div class="header">
+                <h1>📁 Synology NAS 檔案管理系統</h1>
+                <div class="status-bar">
+                    <div>
+                        <span id="userInfo">歡迎使用</span>
+                        <span id="sessionInfo"></span>
+                    </div>
+                    <div>
+                        <button id="refreshBtn" class="btn btn-secondary btn-small">🔄 重新整理</button>
+                        <button id="debugBtn" class="btn btn-secondary btn-small">🐛 Debug</button>
+                        <button id="logoutBtn" class="btn btn-danger btn-small">🚪 登出</button>
+                    </div>
+                </div>
+            </div>
+
+            <!-- 功能頁籤 -->
+            <div class="tabs">
+                <div class="tab active" data-tab="files">📁 檔案管理</div>
+                <div class="tab" data-tab="upload">📤 檔案上傳</div>
+                <div class="tab" data-tab="tasks">⚙️ 系統任務</div>
+            </div>
+
+            <!-- 訊息顯示區域 -->
+            <div id="messageArea"></div>
+
+            <!-- 檔案管理頁籤 -->
+            <div id="filesTab" class="tab-content active">
+                <div class="breadcrumb" id="breadcrumb"></div>
+                <div class="current-path">
+                    當前路徑: <span id="currentPath">/home/www</span>
+                </div>
+                <div>
+                    <input type="text" id="pathInput" placeholder="輸入路徑，例如: /home/documents" style="width: 70%; display: inline-block;">
+                    <button id="goPathBtn" class="btn btn-small" style="width: 25%; margin-left: 5%;">📂 前往</button>
+                </div>
+                <div class="file-list" id="fileList">
+                    <div style="text-align: center; color: #718096;">
+                        請先選擇路徑或點擊重新整理來載入檔案列表
+                    </div>
+                </div>
+            </div>
+
+            <!-- 檔案上傳頁籤 -->
+            <div id="uploadTab" class="tab-content">
+                <div class="form-group">
+                    <label for="uploadPath">上傳路徑</label>
+                    <input type="text" id="uploadPath" value="/home/www" placeholder="/home/www">
+                </div>
+                <div class="upload-area" id="uploadArea">
+                    <div>
+                        📤 拖拽檔案到這裡或點擊選擇檔案
+                    </div>
+                    <input type="file" id="fileInput" multiple style="display: none;">
+                    <div style="margin-top: 15px;">
+                        <button id="selectFileBtn" class="btn">選擇檔案</button>
+                        <label style="margin-left: 20px;">
+                            <input type="checkbox" id="overwriteCheck"> 覆蓋現有檔案
+                        </label>
+                    </div>
+                </div>
+                <div id="uploadProgress" class="hidden">
+                    <div style="background: #e2e8f0; border-radius: 10px; height: 10px; margin: 10px 0;">
+                        <div id="progressBar" style="background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); height: 100%; border-radius: 10px; width: 0%; transition: width 0.3s ease;"></div>
+                    </div>
+                    <div id="uploadStatus"></div>
+                </div>
+            </div>
+
+            <!-- 系統任務頁籤 -->
+            <div id="tasksTab" class="tab-content">
+                <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 20px;">
+                    <h3>🔧 系統後台任務</h3>
+                    <button id="refreshTasksBtn" class="btn btn-small">🔄 重新整理</button>
+                </div>
+                <div id="tasksList">
+                    <div style="text-align: center; color: #718096;">
+                        點擊重新整理來載入任務列表
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        class NASManager {
+            constructor() {
+                this.baseURL = window.location.origin;
+                this.currentPath = '/home/www';
+                this.isLoggedIn = false;
+                this.init();
+            }
+
+            init() {
+                this.setupEventListeners();
+                this.checkSession();
+            }
+
+            setupEventListeners() {
+                // 登入表單
+                document.getElementById('loginForm').addEventListener('submit', (e) => {
+                    e.preventDefault();
+                    this.login();
+                });
+
+                // 登出按鈕
+                document.getElementById('logoutBtn').addEventListener('click', () => {
+                    this.logout();
+                });
+
+                // 重新整理按鈕
+                document.getElementById('refreshBtn').addEventListener('click', () => {
+                    this.loadFiles();
+                });
+
+                // Debug 按鈕
+                document.getElementById('debugBtn').addEventListener('click', () => {
+                    this.toggleDebug();
+                });
+
+                // 頁籤切換
+                document.querySelectorAll('.tab').forEach(tab => {
+                    tab.addEventListener('click', (e) => {
+                        this.switchTab(e.target.dataset.tab);
+                    });
+                });
+
+                // 路徑前往
+                document.getElementById('goPathBtn').addEventListener('click', () => {
+                    const path = document.getElementById('pathInput').value.trim();
+                    if (path) {
+                        this.currentPath = path;
+                        this.loadFiles();
+                    }
+                });
+
+                // 檔案上傳
+                document.getElementById('selectFileBtn').addEventListener('click', () => {
+                    document.getElementById('fileInput').click();
+                });
+
+                document.getElementById('fileInput').addEventListener('change', (e) => {
+                    this.uploadFiles(e.target.files);
+                });
+
+                // 拖拽上傳
+                const uploadArea = document.getElementById('uploadArea');
+                uploadArea.addEventListener('dragover', (e) => {
+                    e.preventDefault();
+                    uploadArea.classList.add('drag-over');
+                });
+
+                uploadArea.addEventListener('dragleave', () => {
+                    uploadArea.classList.remove('drag-over');
+                });
+
+                uploadArea.addEventListener('drop', (e) => {
+                    e.preventDefault();
+                    uploadArea.classList.remove('drag-over');
+                    this.uploadFiles(e.dataTransfer.files);
+                });
+
+                // 重新整理任務
+                document.getElementById('refreshTasksBtn').addEventListener('click', () => {
+                    this.loadTasks();
+                });
+            }
+
+            async checkSession() {
+                try {
+                    const response = await fetch(`${this.baseURL}/api/session/check`);
+                    const data = await response.json();
+                    
+                    if (data.success) {
+                        this.isLoggedIn = true;
+                        this.showMainContent();
+                        this.updateSessionInfo(data.data);
+                        this.loadFiles();
+                    } else {
+                        this.showLoginSection();
+                    }
+                } catch (error) {
+                    console.error('檢查 session 錯誤:', error);
+                    this.showLoginSection();
+                }
+            }
+
+            async login() {
+                const username = document.getElementById('username').value;
+                const password = document.getElementById('password').value;
+                
+                this.setLoading('login', true);
+                
+                try {
+                    const response = await fetch(`${this.baseURL}/api/login`, {
+                        method: 'POST',
+                        headers: {
+                            'Content-Type': 'application/json',
+                        },
+                        body: JSON.stringify({
+                            account: username,
+                            password: password
+                        })
+                    });
+
+                    const data = await response.json();
+                    
+                    if (data.success) {
+                        this.isLoggedIn = true;
+                        this.showMessage('success', `登入成功！歡迎 ${username}`);
+                        this.showMainContent();
+                        this.loadFiles();
+                    } else {
+                        this.showMessage('error', `登入失敗: ${data.message}`, 'loginMessage');
+                    }
+                } catch (error) {
+                    this.showMessage('error', `連線錯誤: ${error.message}`, 'loginMessage');
+                } finally {
+                    this.setLoading('login', false);
+                }
+            }
+
+            async logout() {
+                try {
+                    await fetch(`${this.baseURL}/api/logout`, { method: 'POST' });
+                    this.isLoggedIn = false;
+                    this.showLoginSection();
+                    this.showMessage('info', '已成功登出');
+                } catch (error) {
+                    console.error('登出錯誤:', error);
+                }
+            }
+
+            async loadFiles() {
+                if (!this.isLoggedIn) return;
+
+                const fileList = document.getElementById('fileList');
+                fileList.innerHTML = '<div style="text-align: center;"><span class="loading"></span> 載入中...</div>';
+
+                try {
+                    const response = await fetch(`${this.baseURL}/api/files?path=${encodeURIComponent(this.currentPath)}`);
+                    const data = await response.json();
+
+                    if (data.success) {
+                        this.displayFiles(data.data.files);
+                        this.updateCurrentPath();
+                        this.updateBreadcrumb();
+                    } else {
+                        this.showMessage('error', `載入失敗: ${data.message}`);
+                        fileList.innerHTML = '<div style="text-align: center; color: #e53e3e;">載入失敗</div>';
+                    }
+                } catch (error) {
+                    this.showMessage('error', `載入錯誤: ${error.message}`);
+                    fileList.innerHTML = '<div style="text-align: center; color: #e53e3e;">載入錯誤</div>';
+                }
+            }
+
+            displayFiles(files) {
+                const fileList = document.getElementById('fileList');
+                
+                if (!files || files.length === 0) {
+                    fileList.innerHTML = '<div style="text-align: center; color: #718096;">此目錄為空</div>';
+                    return;
+                }
+
+                let html = '';
+                
+                // 如果不是根目錄，顯示返回上層目錄
+                if (this.currentPath !== '/' && this.currentPath !== '') {
+                    html += `
+                        <div class="file-item" onclick="nasManager.navigateUp()">
+                            <div class="file-icon">📁</div>
+                            <div class="file-info">
+                                <div class="file-name">.. (上層目錄)</div>
+                            </div>
+                        </div>
+                    `;
+                }
+
+                files.forEach(file => {
+                    const icon = file.isdir ? '📁' : this.getFileIcon(file.name);
+                    const size = file.isdir ? '' : this.formatFileSize(file.additional?.size || 0);
+                    const mtime = file.additional?.time?.mtime ? this.formatDateTime(file.additional.time.mtime) : '';
+                    
+                    html += `
+                        <div class="file-item">
+                            <div class="file-icon">${icon}</div>
+                            <div class="file-info">
+                                <div class="file-name">${file.name}</div>
+                                <div class="file-size">
+                                    ${size ? `大小: ${size}` : ''}
+                                    ${size && mtime ? ' | ' : ''}
+                                    ${mtime ? `修改時間: ${mtime}` : ''}
+                                </div>
+                            </div>
+                            <div class="file-actions">
+                                ${file.isdir ? 
+                                    `<button class="btn btn-small btn-secondary" onclick="nasManager.enterDirectory('${file.name}')">📂 進入</button>` :
+                                    `<button class="btn btn-small btn-success" onclick="nasManager.downloadFile('${file.name}')">📥 下載</button>`
+                                }
+                                <button class="btn btn-small btn-danger" onclick="nasManager.deleteFile('${file.name}')">🗑️ 刪除</button>
+                            </div>
+                        </div>
+                    `;
+                });
+
+                fileList.innerHTML = html;
+            }
+
+            getFileIcon(filename) {
+                const ext = filename.split('.').pop().toLowerCase();
+                const iconMap = {
+                    'txt': '📄', 'doc': '📄', 'docx': '📄', 'pdf': '📄',
+                    'jpg': '🖼️', 'jpeg': '🖼️', 'png': '🖼️', 'gif': '🖼️', 'bmp': '🖼️',
+                    'mp4': '🎬', 'avi': '🎬', 'mkv': '🎬', 'mov': '🎬',
+                    'mp3': '🎵', 'wav': '🎵', 'flac': '🎵',
+                    'zip': '📦', '7z': '📦', 'rar': '📦',
+                    'js': '⚙️', 'html': '🌐', 'css': '🎨', 'py': '🐍'
+                };
+                return iconMap[ext] || '📄';
+            }
+
+            formatFileSize(bytes) {
+                if (bytes === 0) return '0 B';
+                const k = 1024;
+                const sizes = ['B', 'KB', 'MB', 'GB', 'TB'];
+                const i = Math.floor(Math.log(bytes) / Math.log(k));
+                return parseFloat((bytes / Math.pow(k, i)).toFixed(2)) + ' ' + sizes[i];
+            }
+
+            formatDateTime(unixTimestamp) {
+                if (!unixTimestamp) return '';
+                const date = new Date(unixTimestamp * 1000);
+                return date.toLocaleString('zh-TW', {
+                    year: 'numeric',
+                    month: '2-digit',
+                    day: '2-digit',
+                    hour: '2-digit',
+                    minute: '2-digit'
+                });
+            }
+
+            navigateUp() {
+                const pathParts = this.currentPath.split('/').filter(p => p);
+                pathParts.pop();
+                this.currentPath = '/' + pathParts.join('/');
+                if (this.currentPath === '/') this.currentPath = '/home/www';
+                this.loadFiles();
+            }
+
+            enterDirectory(dirname) {
+                this.currentPath = this.currentPath.endsWith('/') ? 
+                    this.currentPath + dirname : 
+                    this.currentPath + '/' + dirname;
+                this.loadFiles();
+            }
+
+            updateCurrentPath() {
+                document.getElementById('currentPath').textContent = this.currentPath;
+                document.getElementById('pathInput').value = this.currentPath;
+            }
+
+            updateBreadcrumb() {
+                const breadcrumb = document.getElementById('breadcrumb');
+                const parts = this.currentPath.split('/').filter(p => p);
+                
+                let html = '<span class="breadcrumb-item" onclick="nasManager.navigateTo(\'/home/www\')">🏠 首頁</span>';
+                
+                let currentPath = '';
+                parts.forEach((part, index) => {
+                    currentPath += '/' + part;
+                    if (index < parts.length - 1) {
+                        html += `<span class="breadcrumb-separator">></span><span class="breadcrumb-item" onclick="nasManager.navigateTo('${currentPath}')">${part}</span>`;
+                    } else {
+                        html += `<span class="breadcrumb-separator">></span><span class="breadcrumb-item" style="color: #4a5568; font-weight: bold;">${part}</span>`;
+                    }
+                });
+                
+                breadcrumb.innerHTML = html;
+            }
+
+            navigateTo(path) {
+                this.currentPath = path;
+                this.loadFiles();
+            }
+
+            async downloadFile(filename) {
+                try {
+                    const filePath = this.currentPath.endsWith('/') ? 
+                        this.currentPath + filename : 
+                        this.currentPath + '/' + filename;
+                    
+                    const response = await fetch(`${this.baseURL}/api/download?path=${encodeURIComponent(filePath)}`);
+                    const data = await response.json();
+                    
+                    if (data.success && data.data.url) {
+                        window.open(data.data.url, '_blank');
+                        this.showMessage('success', `開始下載: ${filename}`);
+                    } else {
+                        this.showMessage('error', `下載失敗: ${data.message}`);
+                    }
+                } catch (error) {
+                    this.showMessage('error', `下載錯誤: ${error.message}`);
+                }
+            }
+
+            async deleteFile(filename) {
+                if (!confirm(`確定要刪除「${filename}」嗎？`)) return;
+
+                try {
+                    const filePath = this.currentPath.endsWith('/') ? 
+                        this.currentPath + filename : 
+                        this.currentPath + '/' + filename;
+                    
+                    const response = await fetch(`${this.baseURL}/api/delete`, {
+                        method: 'DELETE',
+                        headers: {
+                            'Content-Type': 'application/json',
+                        },
+                        body: JSON.stringify({
+                            paths: [filePath]
+                        })
+                    });
+
+                    const data = await response.json();
+                    
+                    if (data.success) {
+                        this.showMessage('success', `已啟動刪除任務: ${filename}`);
+                        // 延遲重新載入，給刪除操作一些時間
+                        setTimeout(() => this.loadFiles(), 1000);
+                    } else {
+                        this.showMessage('error', `刪除失敗: ${data.message}`);
+                    }
+                } catch (error) {
+                    this.showMessage('error', `刪除錯誤: ${error.message}`);
+                }
+            }
+
+            async uploadFiles(files) {
+                if (!files || files.length === 0) return;
+
+                const uploadPath = document.getElementById('uploadPath').value || '/home/www';
+                const overwrite = document.getElementById('overwriteCheck').checked;
+                
+                const progressDiv = document.getElementById('uploadProgress');
+                const progressBar = document.getElementById('progressBar');
+                const statusDiv = document.getElementById('uploadStatus');
+                
+                progressDiv.classList.remove('hidden');
+                
+                let completed = 0;
+                const total = files.length;
+
+                for (const file of files) {
+                    try {
+                        statusDiv.textContent = `上傳中: ${file.name}`;
+                        
+                        const formData = new FormData();
+                        formData.append('file', file);
+                        formData.append('path', uploadPath);
+                        formData.append('overwrite', overwrite);
+
+                        const response = await fetch(`${this.baseURL}/api/upload`, {
+                            method: 'POST',
+                            body: formData
+                        });
+
+                        const data = await response.json();
+                        
+                        if (data.success) {
+                            completed++;
+                            const progress = (completed / total) * 100;
+                            progressBar.style.width = `${progress}%`;
+                            statusDiv.textContent = `已完成: ${completed}/${total}`;
+                        } else {
+                            this.showMessage('error', `上傳失敗 ${file.name}: ${data.message}`);
+                        }
+                    } catch (error) {
+                        this.showMessage('error', `上傳錯誤 ${file.name}: ${error.message}`);
+                    }
+                }
+
+                if (completed > 0) {
+                    this.showMessage('success', `成功上傳 ${completed} 個檔案`);
+                    // 如果當前路徑是上傳路徑，重新載入檔案列表
+                    if (this.currentPath === uploadPath) {
+                        this.loadFiles();
+                    }
+                }
+
+                // 重置上傳界面
+                setTimeout(() => {
+                    progressDiv.classList.add('hidden');
+                    progressBar.style.width = '0%';
+                    document.getElementById('fileInput').value = '';
+                }, 2000);
+            }
+
+            async loadTasks() {
+                const tasksList = document.getElementById('tasksList');
+                tasksList.innerHTML = '<div style="text-align: center;"><span class="loading"></span> 載入中...</div>';
+
+                try {
+                    const response = await fetch(`${this.baseURL}/api/tasks`);
+                    const data = await response.json();
+
+                    if (data.success) {
+                        this.displayTasks(data.data.tasks);
+                    } else {
+                        this.showMessage('error', `載入任務失敗: ${data.message}`);
+                        tasksList.innerHTML = '<div style="text-align: center; color: #e53e3e;">載入失敗</div>';
+                    }
+                } catch (error) {
+                    this.showMessage('error', `載入錯誤: ${error.message}`);
+                    tasksList.innerHTML = '<div style="text-align: center; color: #e53e3e;">載入錯誤</div>';
+                }
+            }
+
+            displayTasks(tasks) {
+                const tasksList = document.getElementById('tasksList');
+                
+                if (!tasks || tasks.length === 0) {
+                    tasksList.innerHTML = '<div style="text-align: center; color: #718096;">目前沒有執行中的任務</div>';
+                    return;
+                }
+
+                let html = '';
+                tasks.forEach(task => {
+                    const statusIcon = task.status === 'running' ? '🔄' : 
+                                     task.status === 'completed' ? '✅' : 
+                                     task.status === 'error' ? '❌' : '⏸️';
+                    
+                    html += `
+                        <div class="file-item">
+                            <div class="file-icon">${statusIcon}</div>
+                            <div class="file-info">
+                                <div class="file-name">${task.name || '未知任務'}</div>
+                                <div class="file-size">狀態: ${task.status || 'unknown'}</div>
+                            </div>
+                        </div>
+                    `;
+                });
+
+                tasksList.innerHTML = html;
+            }
+
+            async toggleDebug() {
+                try {
+                    const response = await fetch(`${this.baseURL}/api/debug/toggle`, {
+                        method: 'POST'
+                    });
+                    const data = await response.json();
+                    
+                    if (data.success) {
+                        this.showMessage('info', data.message);
+                    } else {
+                        this.showMessage('error', `Debug 切換失敗: ${data.message}`);
+                    }
+                } catch (error) {
+                    this.showMessage('error', `Debug 切換錯誤: ${error.message}`);
+                }
+            }
+
+            switchTab(tabName) {
+                // 更新頁籤樣式
+                document.querySelectorAll('.tab').forEach(tab => {
+                    tab.classList.remove('active');
+                });
+                document.querySelector(`[data-tab="${tabName}"]`).classList.add('active');
+
+                // 顯示對應內容
+                document.querySelectorAll('.tab-content').forEach(content => {
+                    content.classList.remove('active');
+                });
+                document.getElementById(`${tabName}Tab`).classList.add('active');
+
+                // 載入對應內容
+                if (tabName === 'tasks') {
+                    this.loadTasks();
+                }
+            }
+
+            showLoginSection() {
+                document.getElementById('loginSection').style.display = 'block';
+                document.getElementById('mainContent').style.display = 'none';
+                // 清空登入表單
+                document.getElementById('username').value = '';
+                document.getElementById('password').value = '';
+                document.getElementById('loginMessage').innerHTML = '';
+            }
+
+            showMainContent() {
+                document.getElementById('loginSection').style.display = 'none';
+                document.getElementById('mainContent').style.display = 'block';
+            }
+
+            updateSessionInfo(sessionData) {
+                if (sessionData) {
+                    document.getElementById('sessionInfo').innerHTML = 
+                        `<small style="color: #718096;">登入時間: ${sessionData.login_time} | 已登入: ${sessionData.elapsed_hours}小時</small>`;
+                }
+            }
+
+            showMessage(type, message, containerId = 'messageArea') {
+                const container = document.getElementById(containerId);
+                const messageDiv = document.createElement('div');
+                messageDiv.className = `message ${type}`;
+                messageDiv.textContent = message;
+                
+                container.innerHTML = '';
+                container.appendChild(messageDiv);
+                
+                // 自動隱藏訊息
+                setTimeout(() => {
+                    if (messageDiv.parentNode) {
+                        messageDiv.remove();
+                    }
+                }, 5000);
+            }
+
+            setLoading(action, loading) {
+                const textElement = document.getElementById(`${action}Text`);
+                const loadingElement = document.getElementById(`${action}Loading`);
+                
+                if (loading) {
+                    textElement.classList.add('hidden');
+                    loadingElement.classList.remove('hidden');
+                } else {
+                    textElement.classList.remove('hidden');
+                    loadingElement.classList.add('hidden');
+                }
+            }
+        }
+
+        // 初始化應用
+        const nasManager = new NASManager();
+    </script>
+</body>
+</html> 
