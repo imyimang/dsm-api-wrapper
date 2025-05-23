@@ -4,15 +4,27 @@
 身份驗證相關路由
 """
 
-from flask import Blueprint, request, jsonify, session as flask_session
+from flask import Blueprint, request, jsonify, session as flask_session, current_app
 import time
 import datetime
+import secrets
 from ..services import NASApiService
 
 auth_bp = Blueprint('auth', __name__, url_prefix='/api')
 
 # 創建全域NAS服務實例
 nas_service = NASApiService()
+
+# Token 儲存 (生產環境應該使用 Redis 或資料庫)
+active_tokens = {}
+
+def cleanup_expired_tokens():
+    """清理過期的 tokens"""
+    now = time.time()
+    expired_tokens = [token for token, data in active_tokens.items() 
+                     if now - data['created_at'] > 86400]  # 24小時過期
+    for token in expired_tokens:
+        del active_tokens[token]
 
 def get_nas_session():
     """獲取NAS session"""
@@ -286,7 +298,7 @@ def debug_session_test():
                 "verification_success": bool(verification),
                 "session_keys": list(flask_session.keys()),
                 "session_permanent": flask_session.permanent,
-                "app_secret_key_exists": bool(app.secret_key) if 'app' in globals() else 'unknown'
+                "app_secret_key_exists": bool(current_app.secret_key)
             }
         })
     except Exception as e:
@@ -396,4 +408,55 @@ def api_logout_token():
         return jsonify({
             "success": False,
             "message": f"登出錯誤：{str(e)}"
+        }), 400
+
+@auth_bp.route('/login/token', methods=['POST'])
+def api_login_token():
+    """Token-based 登入API - 跨域友善版本"""
+    try:
+        data = request.get_json() or {}
+        account = data.get('account')
+        password = data.get('password')
+        
+        if not account or not password:
+            return jsonify({
+                "success": False,
+                "message": "請提供帳號和密碼"
+            }), 400
+        
+        # 登入到 DSM
+        result = nas_service.login(account, password)
+        
+        # 清理過期 tokens
+        cleanup_expired_tokens()
+        
+        # 生成新 token
+        token = secrets.token_urlsafe(32)
+        active_tokens[token] = {
+            'sid': nas_service.sid,
+            'syno_token': nas_service.syno_token,
+            'created_at': time.time(),
+            'account': account
+        }
+        
+        nas_service.debug_log("Token-based 登入成功", {
+            "token_preview": token[:8] + "...",
+            "active_tokens_count": len(active_tokens)
+        })
+        
+        return jsonify({
+            "success": True,
+            "message": "Token登入成功",
+            "data": {
+                "token": token,
+                "sid": result["sid"][:8] + "...",
+                "login_time": datetime.datetime.now().strftime('%Y-%m-%d %H:%M:%S'),
+                "expires_in": 86400  # 24小時
+            }
+        })
+    except Exception as e:
+        nas_service.debug_log("Token登入錯誤", str(e))
+        return jsonify({
+            "success": False,
+            "message": f"登入失敗：{str(e)}"
         }), 400 
