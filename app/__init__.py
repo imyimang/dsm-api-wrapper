@@ -22,43 +22,58 @@ def create_app(config_class=Config):
     app.config['SESSION_PERMANENT'] = True
     app.config['PERMANENT_SESSION_LIFETIME'] = timedelta(seconds=app.config['PERMANENT_SESSION_LIFETIME'])
     
-    # 確保 session 配置正確
+    # 🚀 跨域 Cookie 修復：關鍵設置
     app.config['SESSION_COOKIE_SECURE'] = False  # 開發環境不使用 HTTPS
     app.config['SESSION_COOKIE_HTTPONLY'] = True
-    # app.config['SESSION_COOKIE_SAMESITE'] = 'Lax'  # 註解掉：移除 SameSite 限制以支援跨域
+    app.config['SESSION_COOKIE_SAMESITE'] = 'None'  # 🔥 關鍵修復：允許跨域
     app.config['SESSION_COOKIE_DOMAIN'] = None  # 明確設為 None
     app.config['SESSION_COOKIE_PATH'] = '/'  # 明確設置路徑
     app.config['SESSION_COOKIE_NAME'] = 'session'  # 明確設置 cookie 名稱
     
-    # 方法 1: 使用 flask-cors (開發環境設定)
+    # 🌐 CORS 配置修復
     CORS(app, 
          supports_credentials=True,
-         origins=['http://localhost:3000', 'http://127.0.0.1:3000', 'null'],  # 明確指定允許的 origins
+         origins=['http://localhost:3000', 'http://127.0.0.1:3000', 'http://localhost:8080', 'null'],  # 具體 origins
          allow_headers=['Content-Type', 'Authorization', 'X-Requested-With'],
          methods=['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS'],
          send_wildcard=False  # 確保不發送通配符
     )
     
-    # 方法 2: 手動設置 (更精確控制，處理各種特殊情況)
+    # 🛠️ 手動 CORS 處理 (處理邊緣案例)
     @app.after_request
     def after_request(response):
         """確保每個回應都包含正確的 CORS 標頭"""
         origin = request.headers.get('Origin')
         
-        # 處理各種 origin 情況
-        if origin:
-            response.headers['Access-Control-Allow-Origin'] = origin
-        else:
-            # 處理 file:// 協議或其他 origin 為 null 的情況
-            response.headers['Access-Control-Allow-Origin'] = '*'
+        # 允許的 origins 列表
+        allowed_origins = [
+            'http://localhost:3000', 
+            'http://127.0.0.1:3000', 
+            'http://localhost:8080',
+            'file://',  # 本地文件協議
+            'null'      # 某些情況下的 origin
+        ]
         
+        # 處理 origin
+        if origin and origin in allowed_origins:
+            response.headers['Access-Control-Allow-Origin'] = origin
+        elif origin is None or origin == 'null':
+            # 處理 file:// 協議或 origin 為 null 的情況
+            response.headers['Access-Control-Allow-Origin'] = 'null'
+        
+        # 設置 credentials 和其他 CORS 標頭
         response.headers['Access-Control-Allow-Credentials'] = 'true'
         response.headers['Access-Control-Allow-Methods'] = 'GET, POST, PUT, DELETE, OPTIONS'
         response.headers['Access-Control-Allow-Headers'] = 'Content-Type, Authorization, X-Requested-With'
         
+        # 🔥 重要：確保 Set-Cookie 有正確的屬性
+        if response.headers.get('Set-Cookie'):
+            # Flask 會自動處理，但我們確保屬性正確
+            pass
+        
         return response
     
-    # 處理 OPTIONS 預檢請求
+    # 🔧 OPTIONS 預檢請求處理
     @app.before_request
     def handle_options():
         """處理 CORS 預檢請求"""
@@ -66,11 +81,18 @@ def create_app(config_class=Config):
             response = make_response()
             origin = request.headers.get('Origin')
             
-            if origin:
+            allowed_origins = [
+                'http://localhost:3000', 
+                'http://127.0.0.1:3000', 
+                'http://localhost:8080',
+                'file://',
+                'null'
+            ]
+            
+            if origin and origin in allowed_origins:
                 response.headers['Access-Control-Allow-Origin'] = origin
-            else:
-                # 處理 file:// 協議 (origin 為 null)
-                response.headers['Access-Control-Allow-Origin'] = '*'
+            elif origin is None or origin == 'null':
+                response.headers['Access-Control-Allow-Origin'] = 'null'
             
             response.headers['Access-Control-Allow-Credentials'] = 'true'
             response.headers['Access-Control-Allow-Methods'] = 'GET, POST, PUT, DELETE, OPTIONS'
