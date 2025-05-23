@@ -6,9 +6,39 @@
 
 - **Base URL**: `http://localhost:5000` (開發環境)
 - **Content-Type**: `application/json`
-- **認證方式**: Cookie-based Session (Flask Session)
-- **CORS**: 支援跨域請求，需設定 `credentials: 'include'`
+- **認證方式**: 
+  - **主要方式**: Cookie-based Session (Flask Session)
+  - **替代方式**: Token-based Authentication (Bearer Token)
+- **CORS**: ✅ 完整支援跨域請求
+  - 支援的 Origins: `http://localhost:3000`, `http://127.0.0.1:3000`, `http://localhost:8080`, `null`
+  - Cookie 設置: `SameSite=None; HttpOnly=True`
+  - 前端必須設定: `credentials: 'include'`
 - **網頁應用**: `http://localhost:5000/app` (完整的 NAS 管理介面)
+
+## 🔧 跨域配置更新 (2025-01-24)
+
+### ✅ 已修復的跨域問題
+- **SameSite 設置**: 從 `Lax` 改為 `None`，支援跨域 Cookie 傳送
+- **CORS Origin**: 明確指定允許的 origins，不使用通配符 `*`
+- **Credentials 支援**: 正確處理 `Access-Control-Allow-Credentials: true`
+- **邊緣案例處理**: 支援 `file://` 協議和 `null` origin
+
+### 🌐 支援的 Origins
+```
+- http://localhost:3000 (開發前端)
+- http://127.0.0.1:3000 (本地 IP)
+- http://localhost:8080 (替代端口)
+- null (file:// 協議)
+```
+
+### 📋 前端配置要求
+```javascript
+// 所有 API 請求必須包含
+fetch('http://localhost:5000/api/endpoint', {
+    credentials: 'include',  // 🔥 必須設定！
+    // ... 其他設置
+});
+```
 
 ## 統一回應格式
 
@@ -35,7 +65,9 @@
 
 ## 身份驗證端點
 
-### POST /api/login
+### 🍪 Cookie-based 認證 (推薦)
+
+#### POST /api/login
 登入 NAS 系統，建立 Flask Session
 
 **請求體:**
@@ -66,9 +98,13 @@
 }
 ```
 
+**重要設置:**
+- Cookie 自動設置: `session=xxx; SameSite=None; HttpOnly=True`
+- 前端必須使用: `credentials: 'include'`
+
 ---
 
-### POST /api/logout
+#### POST /api/logout
 登出 NAS 系統，清除 Session
 
 **回應:**
@@ -81,7 +117,7 @@
 
 ---
 
-### GET /api/session/check
+#### GET /api/session/check
 檢查當前 Session 狀態
 
 **回應:**
@@ -108,10 +144,90 @@
 }
 ```
 
+### 🔑 Token-based 認證 (跨域友善)
+
+#### POST /api/login/token
+Token-based 登入，適合跨域應用
+
+**請求體:**
+```json
+{
+  "account": "your_username",
+  "password": "your_password"
+}
+```
+
+**回應:**
+```json
+{
+  "success": true,
+  "message": "Token登入成功",
+  "data": {
+    "token": "eyJ0eXAiOiJKV1QiLCJhbGciOiJIUzI1NiJ9...",
+    "sid": "xxxxxxxx...",
+    "login_time": "2024-01-01 12:00:00",
+    "expires_in": 86400
+  }
+}
+```
+
+**使用方式:**
+```javascript
+// 在後續請求中使用 Authorization header
+fetch('/api/files', {
+    headers: {
+        'Authorization': `Bearer ${token}`
+    }
+});
+```
+
 ---
 
+#### GET /api/session/check/token
+檢查 Token session 狀態
+
+**請求標頭:**
+```
+Authorization: Bearer <your_token>
+```
+
+**回應:**
+```json
+{
+  "success": true,
+  "message": "Token Session有效",
+  "data": {
+    "valid": true,
+    "account": "username",
+    "login_time": "2024-01-01 12:00:00",
+    "elapsed_hours": 1.5,
+    "token_preview": "eyJ0eXAi..."
+  }
+}
+```
+
+---
+
+#### POST /api/logout/token
+Token-based 登出
+
+**請求標頭:**
+```
+Authorization: Bearer <your_token>
+```
+
+**回應:**
+```json
+{
+  "success": true,
+  "message": "Token登出成功"
+}
+```
+
+## 🔍 Debug 端點 (開發用)
+
 ### GET /api/debug/session
-除錯 Flask session 狀態 (開發用)
+檢查 Flask session 狀態
 
 **回應:**
 ```json
@@ -119,8 +235,71 @@
   "success": true,
   "debug_info": {
     "flask_session_exists": true,
-    "flask_session_data": {...},
-    "nas_service_state": {...}
+    "flask_session_data": {
+      "nas_session": {
+        "sid": "xxx",
+        "syno_token": "xxx",
+        "login_time": 1704067200
+      }
+    },
+    "flask_session_keys": ["_permanent", "nas_session"],
+    "nas_service_state": {
+      "sid_exists": true,
+      "syno_token_exists": true,
+      "sid_preview": "xxxxxxxx...",
+      "syno_token_preview": "xxxxxxxx..."
+    }
+  }
+}
+```
+
+---
+
+### GET /POST /api/debug/headers
+檢查請求標頭和 CORS 設置
+
+**回應:**
+```json
+{
+  "success": true,
+  "debug_info": {
+    "method": "GET",
+    "all_headers": {
+      "Origin": "http://localhost:3000",
+      "User-Agent": "Mozilla/5.0...",
+      "Cookie": "session=xxx"
+    },
+    "cookies": {
+      "session": "xxx"
+    },
+    "origin": "http://localhost:3000",
+    "cookie_header": "session=xxx",
+    "flask_session_keys": ["_permanent", "nas_session"],
+    "flask_session_data": {...}
+  }
+}
+```
+
+---
+
+### POST /api/debug/session/test
+測試 Flask session 設置功能
+
+**回應:**
+```json
+{
+  "success": true,
+  "message": "Session 測試完成",
+  "debug_info": {
+    "test_data_set": {
+      "test_key": "test_value",
+      "timestamp": 1704067200,
+      "count": 1
+    },
+    "verification_success": true,
+    "session_keys": ["_permanent", "test_data", "count"],
+    "session_permanent": true,
+    "app_secret_key_exists": true
   }
 }
 ```
@@ -218,14 +397,6 @@ curl -X POST http://localhost:5000/api/upload \
 }
 ```
 
-**錯誤範例:**
-```json
-{
-  "success": false,
-  "message": "上傳失敗：沒有檔案"
-}
-```
-
 ---
 
 ### DELETE /api/delete
@@ -254,14 +425,6 @@ curl -X POST http://localhost:5000/api/upload \
 ### GET /api/delete/status/<taskid>
 查詢刪除任務執行狀態
 
-**路徑參數:**
-- `taskid`: 刪除任務 ID
-
-**範例請求:**
-```
-GET /api/delete/status/task_12345
-```
-
 **回應:**
 ```json
 {
@@ -272,20 +435,6 @@ GET /api/delete/status/task_12345
     "total": 3,
     "processed": 3,
     "errors": []
-  }
-}
-```
-
-**進行中任務回應:**
-```json
-{
-  "success": true,
-  "data": {
-    "finished": false,
-    "progress": 66,
-    "total": 3,
-    "processed": 2,
-    "current_file": "/path/to/file3.txt"
   }
 }
 ```
@@ -308,11 +457,6 @@ GET /api/delete/status/task_12345
 }
 ```
 
-**選項說明:**
-- `level`: 壓縮等級 (`store`, `fastest`, `normal`, `maximum`)
-- `format`: 壓縮格式 (`zip`, `7z`)
-- `password`: 壓縮密碼 (選填)
-
 **回應:**
 ```json
 {
@@ -331,11 +475,6 @@ GET /api/delete/status/task_12345
 
 **查詢參數:**
 - `path`: 檔案路徑 (必填)
-
-**範例請求:**
-```
-GET /api/download?path=/home/documents/file.txt
-```
 
 **回應:**
 ```json
@@ -366,29 +505,14 @@ GET /api/download?path=/home/documents/file.txt
         "progress": 75,
         "start_time": "2024-01-01 10:00:00",
         "estimated_time": 300
-      },
-      {
-        "id": "task_002",
-        "name": "資料備份",
-        "status": "completed",
-        "progress": 100,
-        "start_time": "2024-01-01 09:00:00",
-        "end_time": "2024-01-01 09:30:00"
       }
     ],
-    "total": 2,
+    "total": 1,
     "running": 1,
-    "completed": 1
+    "completed": 0
   }
 }
 ```
-
-**任務狀態:**
-- `waiting`: 等待中
-- `running`: 執行中
-- `completed`: 已完成
-- `error`: 錯誤
-- `cancelled`: 已取消
 
 ---
 
@@ -404,60 +528,16 @@ GET /api/download?path=/home/documents/file.txt
 }
 ```
 
-**Debug 模式關閉時:**
-```json
-{
-  "success": true,
-  "debug_mode": false,
-  "message": "Debug模式已關閉"
-}
-```
-
-## 權限說明
-
-### 檔案操作權限
-- 檔案讀取: 需要檔案的讀取權限
-- 檔案上傳: 需要目標目錄的寫入權限
-- 檔案刪除: 需要檔案的刪除權限
-- 檔案壓縮: 需要來源檔案的讀取權限和目標路徑的寫入權限
-
-### 系統操作權限
-- 系統任務查看: 需要管理者權限
-- Debug 模式切換: 需要管理者權限
-
-## 錯誤處理
-
-### 常見錯誤範例
-
-```json
-{
-  "success": false,
-  "message": "未登入"
-}
-```
-
-```json
-{
-  "success": false,
-  "message": "獲取檔案列表失敗：權限不足"
-}
-```
-
-```json
-{
-  "success": false,
-  "message": "上傳失敗：沒有檔案"
-}
-```
-
 ## 使用範例
 
-### JavaScript 範例 (正確的 Cookie-based 認證)
+### JavaScript 範例
+
+#### 🍪 Cookie-based 認證 (推薦，支援跨域)
 ```javascript
-// 登入
+// 登入 - 支援跨域 (localhost:3000 → localhost:5000)
 fetch('http://localhost:5000/api/login', {
     method: 'POST',
-    credentials: 'include',  // 重要！必須設定
+    credentials: 'include',  // 🔥 必須設定！支援跨域 Cookie
     headers: {
         'Content-Type': 'application/json',
     },
@@ -469,43 +549,89 @@ fetch('http://localhost:5000/api/login', {
 .then(response => response.json())
 .then(data => {
     if (data.success) {
-        // 登入成功，後續請求會自動帶上 cookie
+        console.log('✅ 登入成功，Cookie 已設置 (SameSite=None)');
+        // 後續請求會自動帶上 cookie
         return fetch('http://localhost:5000/api/files', {
             credentials: 'include'  // 必須設定
         });
     }
 });
 
-// 獲取檔案列表
-fetch('http://localhost:5000/api/files?path=/home', {
+// 檢查 session 狀態
+fetch('http://localhost:5000/api/session/check', {
     credentials: 'include'
 })
 .then(response => response.json())
-.then(data => console.log(data));
+.then(data => {
+    if (data.success) {
+        console.log('✅ Session 有效:', data.data.valid);
+    } else {
+        console.log('❌ Session 無效，需要重新登入');
+    }
+});
+```
 
-// 上傳檔案
-const formData = new FormData();
-formData.append('file', fileInput.files[0]);
-formData.append('path', '/home/uploads');
-formData.append('overwrite', 'true');
+#### 🔑 Token-based 認證
+```javascript
+let authToken = null;
 
-fetch('http://localhost:5000/api/upload', {
+// Token 登入
+fetch('http://localhost:5000/api/login/token', {
     method: 'POST',
-    credentials: 'include',
-    body: formData
+    headers: {
+        'Content-Type': 'application/json',
+    },
+    body: JSON.stringify({
+        account: 'your_username',
+        password: 'your_password'
+    })
+})
+.then(response => response.json())
+.then(data => {
+    if (data.success) {
+        authToken = data.data.token;
+        console.log('✅ Token 登入成功');
+        localStorage.setItem('nas_token', authToken);
+    }
+});
+
+// 使用 Token 進行 API 請求
+fetch('http://localhost:5000/api/files?path=/home', {
+    headers: {
+        'Authorization': `Bearer ${authToken}`
+    }
 })
 .then(response => response.json())
 .then(data => console.log(data));
+```
+
+#### 🔍 Debug 檢查 (開發用)
+```javascript
+// 檢查 Flask Session 狀態
+fetch('http://localhost:5000/api/debug/session', {
+    credentials: 'include'
+})
+.then(response => response.json())
+.then(data => {
+    console.log('Flask Session 狀態:', data.debug_info);
+});
+
+// 檢查請求標頭
+fetch('http://localhost:5000/api/debug/headers', {
+    credentials: 'include'
+})
+.then(response => response.json())
+.then(data => {
+    console.log('請求標頭信息:', data.debug_info);
+});
 ```
 
 ### Python 範例
 ```python
 import requests
 
-# 創建session以保持cookie
+# Cookie-based 認證
 session = requests.Session()
-
-# 登入
 login_data = {
     "account": "your_username", 
     "password": "your_password"
@@ -516,20 +642,21 @@ if response.json()['success']:
     # 獲取檔案列表
     files = session.get("http://localhost:5000/api/files?path=/home")
     print(files.json())
+
+# Token-based 認證
+token_response = requests.post("http://localhost:5000/api/login/token", json=login_data)
+if token_response.json()['success']:
+    token = token_response.json()['data']['token']
     
-    # 上傳檔案
-    with open("test.txt", "rb") as f:
-        upload_response = session.post(
-            "http://localhost:5000/api/upload",
-            files={"file": f},
-            data={"path": "/home/uploads", "overwrite": "true"}
-        )
-    print(upload_response.json())
+    # 使用 token 請求
+    files = requests.get("http://localhost:5000/api/files?path=/home", 
+                        headers={'Authorization': f'Bearer {token}'})
+    print(files.json())
 ```
 
 ### cURL 範例
 ```bash
-# 登入並保存cookie
+# Cookie-based 認證
 curl -X POST http://localhost:5000/api/login \
   -H "Content-Type: application/json" \
   -d '{"account":"your_username","password":"your_password"}' \
@@ -539,24 +666,57 @@ curl -X POST http://localhost:5000/api/login \
 curl -X GET "http://localhost:5000/api/files?path=/home" \
   -b cookies.txt
 
-# 上傳檔案
-curl -X POST http://localhost:5000/api/upload \
-  -b cookies.txt \
-  -F "file=@test.txt" \
-  -F "path=/home/uploads" \
-  -F "overwrite=true"
-
-# 刪除檔案
-curl -X DELETE http://localhost:5000/api/delete \
-  -b cookies.txt \
+# Token-based 認證
+TOKEN=$(curl -X POST http://localhost:5000/api/login/token \
   -H "Content-Type: application/json" \
-  -d '{"paths":["/home/uploads/test.txt"]}'
+  -d '{"account":"your_username","password":"your_password"}' \
+  | jq -r '.data.token')
+
+# 使用 token 獲取檔案列表
+curl -X GET "http://localhost:5000/api/files?path=/home" \
+  -H "Authorization: Bearer $TOKEN"
 ```
 
 ## 重要注意事項
 
-1. **認證方式**: 使用 Cookie-based Session，前端必須設定 `credentials: 'include'`
-2. **上傳檔案**: 預設 `overwrite=true`，會覆蓋同名檔案
-3. **檔案列表**: 回應包含 `offset` 和 `total` 欄位，支援分頁
-4. **錯誤處理**: 統一使用 `success` 和 `message` 欄位
-5. **路徑格式**: 使用絕對路徑，如 `/home/www/file.txt`
+### 🔧 2025-01-24 跨域修復更新
+
+1. **跨域 Cookie 支援**: ✅ 已完全修復
+   - Cookie 設置: `SameSite=None; HttpOnly=True`
+   - 支援從 `localhost:3000` 訪問 `localhost:5000`
+   - 前端**必須**設定 `credentials: 'include'`
+
+2. **認證方式選擇**:
+   - **推薦**: Cookie-based Session (支援跨域)
+   - **替代**: Token-based Authentication (Bearer Token)
+
+3. **CORS 配置**:
+   - 支援的 Origins: `localhost:3000`, `localhost:8080`, `null`
+   - 自動處理 OPTIONS 預檢請求
+   - 正確設置 `Access-Control-Allow-Credentials: true`
+
+4. **Debug 工具**:
+   - `/api/debug/session` - 檢查 Flask session 狀態
+   - `/api/debug/headers` - 檢查請求標頭
+   - `/api/debug/session/test` - 測試 session 設置
+
+### 📋 技術細節
+
+5. **上傳檔案**: 預設 `overwrite=true`，會覆蓋同名檔案
+6. **檔案列表**: 回應包含 `offset` 和 `total` 欄位，支援分頁
+7. **錯誤處理**: 統一使用 `success` 和 `message` 欄位
+8. **路徑格式**: 使用絕對路徑，如 `/home/www/file.txt`
+
+### 🚀 測試建議
+
+**修復驗證步驟**:
+1. 重啟 Flask 伺服器
+2. 清除瀏覽器 cookies
+3. 重新載入前端應用 (localhost:3000)
+4. 測試登入流程
+5. 檢查 `/api/debug/session` 顯示 `flask_session_exists: true`
+
+**常見問題排除**:
+- 如果 session 仍無效，檢查是否設定 `credentials: 'include'`
+- 跨域請求失敗，確認 Origin 在允許列表中
+- Token 認證可作為 Cookie 的替代方案 
