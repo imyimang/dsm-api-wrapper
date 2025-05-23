@@ -13,7 +13,22 @@ file_bp = Blueprint('file', __name__, url_prefix='/api')
 nas_service = NASApiService()
 
 def get_nas_session():
-    """獲取NAS session"""
+    """獲取NAS session (支援 Cookie 和 Token 認證)"""
+    # 1. 優先嘗試 Token 認證
+    auth_header = request.headers.get('Authorization', '')
+    if auth_header.startswith('Bearer '):
+        token = auth_header[7:]
+        # 需要從 auth_routes 模組導入 active_tokens 和相關函數
+        from .auth_routes import active_tokens, cleanup_expired_tokens
+        
+        cleanup_expired_tokens()
+        token_data = active_tokens.get(token)
+        if token_data:
+            nas_service.sid = token_data.get('sid')
+            nas_service.syno_token = token_data.get('syno_token')
+            return nas_service
+    
+    # 2. 回退到 Cookie Session 認證
     session_data = flask_session.get('nas_session')
     if not session_data:
         return None

@@ -18,14 +18,17 @@ def create_app(config_class=Config):
     # 確保 session 配置正確
     app.config['SESSION_COOKIE_SECURE'] = False  # 開發環境不使用 HTTPS
     app.config['SESSION_COOKIE_HTTPONLY'] = True
-    app.config['SESSION_COOKIE_SAMESITE'] = 'Lax'
+    # app.config['SESSION_COOKIE_SAMESITE'] = 'Lax'  # 註解掉：移除 SameSite 限制以支援跨域
+    app.config['SESSION_COOKIE_DOMAIN'] = None  # 明確設為 None
+    app.config['SESSION_COOKIE_PATH'] = '/'  # 明確設置路徑
     
     # 方法 1: 使用 flask-cors (開發環境設定)
     CORS(app, 
          supports_credentials=True,
-         origins=['*'],  # 開發環境可以使用 *
+         origins=['http://localhost:3000', 'http://127.0.0.1:3000', 'null'],  # 明確指定允許的 origins
          allow_headers=['Content-Type', 'Authorization', 'X-Requested-With'],
-         methods=['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS']
+         methods=['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS'],
+         send_wildcard=False  # 確保不發送通配符
     )
     
     # 方法 2: 手動設置 (更精確控制，處理各種特殊情況)

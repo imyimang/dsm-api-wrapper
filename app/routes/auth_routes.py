@@ -34,6 +34,39 @@ def get_nas_session():
     
     return nas_service
 
+def get_nas_session_by_token():
+    """透過 token 獲取 NAS session"""
+    # 檢查 Authorization header
+    auth_header = request.headers.get('Authorization', '')
+    if auth_header.startswith('Bearer '):
+        token = auth_header[7:]  # 移除 "Bearer " 前綴
+    else:
+        # 檢查 query parameter
+        token = request.args.get('token')
+    
+    if not token:
+        return None
+    
+    # 清理過期 tokens
+    cleanup_expired_tokens()
+    
+    # 檢查 token 是否存在且有效
+    token_data = active_tokens.get(token)
+    if not token_data:
+        return None
+    
+    # 恢復 NAS 服務狀態
+    nas_service.sid = token_data.get('sid')
+    nas_service.syno_token = token_data.get('syno_token')
+    
+    nas_service.debug_log("透過 token 恢復 session", {
+        "token_preview": token[:8] + "...",
+        "sid_exists": bool(nas_service.sid),
+        "account": token_data.get('account')
+    })
+    
+    return nas_service
+
 @auth_bp.route('/login', methods=['POST'])
 def api_login():
     """登入API"""
@@ -218,4 +251,105 @@ def debug_headers():
         return jsonify({
             "success": False,
             "error": str(e)
-        }), 500 
+        }), 500
+
+@auth_bp.route('/session/check/token', methods=['GET'])
+def api_check_session_token():
+    """檢查 token session 狀態"""
+    try:
+        service = get_nas_session_by_token()
+        if not service:
+            return jsonify({
+                "success": False,
+                "message": "Token 無效或已過期"
+            }), 401
+        
+        # 獲取 token 資訊
+        auth_header = request.headers.get('Authorization', '')
+        token = auth_header[7:] if auth_header.startswith('Bearer ') else request.args.get('token')
+        token_data = active_tokens.get(token)
+        
+        # 驗證 DSM session 有效性
+        is_logged_in = service.is_logged_in()
+        
+        if is_logged_in:
+            login_time = token_data.get('created_at', time.time())
+            elapsed_time = time.time() - login_time
+            
+            nas_service.debug_log("Token Session驗證成功", {
+                "token_preview": token[:8] + "...",
+                "account": token_data.get('account'),
+                "elapsed_hours": round(elapsed_time / 3600, 1)
+            })
+            
+            return jsonify({
+                "success": True,
+                "message": "Token Session有效",
+                "data": {
+                    "valid": True,
+                    "account": token_data.get('account'),
+                    "login_time": datetime.datetime.fromtimestamp(login_time).strftime('%Y-%m-%d %H:%M:%S'),
+                    "elapsed_hours": round(elapsed_time / 3600, 1),
+                    "token_preview": token[:8] + "..."
+                }
+            })
+        else:
+            # Token 對應的 DSM session 已過期，清理 token
+            nas_service.debug_log("Token 對應的 DSM session 已過期", {
+                "token_preview": token[:8] + "..."
+            })
+            if token in active_tokens:
+                del active_tokens[token]
+            
+            return jsonify({
+                "success": False,
+                "message": "DSM Session已過期",
+                "data": {"valid": False}
+            }), 401
+    except Exception as e:
+        nas_service.debug_log("Token Session檢查發生錯誤", str(e))
+        return jsonify({
+            "success": False,
+            "message": f"檢查token session失敗：{str(e)}"
+        }), 400
+
+@auth_bp.route('/logout/token', methods=['POST'])
+def api_logout_token():
+    """Token-based 登出API"""
+    try:
+        # 獲取 token
+        auth_header = request.headers.get('Authorization', '')
+        token = auth_header[7:] if auth_header.startswith('Bearer ') else request.args.get('token')
+        
+        if not token:
+            return jsonify({
+                "success": False,
+                "message": "未提供 token"
+            }), 400
+        
+        # 清理 token
+        if token in active_tokens:
+            account = active_tokens[token].get('account', 'unknown')
+            del active_tokens[token]
+            
+            nas_service.debug_log("Token 登出成功", {
+                "token_preview": token[:8] + "...",
+                "account": account,
+                "remaining_tokens": len(active_tokens)
+            })
+            
+            return jsonify({
+                "success": True,
+                "message": "Token登出成功"
+            })
+        else:
+            return jsonify({
+                "success": False,
+                "message": "Token 不存在或已過期"
+            }), 400
+    except Exception as e:
+        nas_service.debug_log("Token登出錯誤", str(e))
+        return jsonify({
+            "success": False,
+            "message": f"登出錯誤：{str(e)}"
+        }), 400 
