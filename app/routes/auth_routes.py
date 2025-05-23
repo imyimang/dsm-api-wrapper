@@ -48,7 +48,13 @@ def api_login():
                 "message": "請提供帳號和密碼"
             }), 400
         
+        # 登入到 DSM
         result = nas_service.login(account, password)
+        
+        nas_service.debug_log("DSM 登入成功，準備設置 Flask session", {
+            "sid_exists": bool(nas_service.sid),
+            "syno_token_exists": bool(nas_service.syno_token)
+        })
         
         # 將登入資訊存入Flask session
         flask_session['nas_session'] = {
@@ -56,6 +62,17 @@ def api_login():
             'syno_token': nas_service.syno_token,
             'login_time': time.time()
         }
+        
+        # 確保 session 永久化（在 session 存活期內）
+        flask_session.permanent = True
+        
+        # 驗證 session 是否被正確設置
+        verification = flask_session.get('nas_session')
+        nas_service.debug_log("Flask session 設置驗證", {
+            "session_set_success": bool(verification),
+            "session_data": verification,
+            "session_keys": list(flask_session.keys())
+        })
         
         return jsonify({
             "success": True,
@@ -66,6 +83,7 @@ def api_login():
             }
         })
     except Exception as e:
+        nas_service.debug_log("登入錯誤", str(e))
         return jsonify({
             "success": False,
             "message": f"登入失敗：{str(e)}"
@@ -147,4 +165,32 @@ def api_check_session():
         return jsonify({
             "success": False,
             "message": f"檢查session失敗：{str(e)}"
-        }), 400 
+        }), 400
+
+@auth_bp.route('/debug/session', methods=['GET'])
+def debug_session():
+    """除錯：檢查 Flask session 狀態"""
+    try:
+        session_data = flask_session.get('nas_session')
+        
+        debug_info = {
+            "flask_session_exists": bool(session_data),
+            "flask_session_data": session_data,
+            "flask_session_keys": list(flask_session.keys()) if flask_session else [],
+            "nas_service_state": {
+                "sid_exists": bool(nas_service.sid),
+                "syno_token_exists": bool(nas_service.syno_token),
+                "sid_preview": nas_service.sid[:20] + "..." if nas_service.sid else None,
+                "syno_token_preview": nas_service.syno_token[:20] + "..." if nas_service.syno_token else None
+            }
+        }
+        
+        return jsonify({
+            "success": True,
+            "debug_info": debug_info
+        })
+    except Exception as e:
+        return jsonify({
+            "success": False,
+            "error": str(e)
+        }), 500 
