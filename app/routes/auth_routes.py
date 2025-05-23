@@ -193,4 +193,29 @@ def debug_session():
         return jsonify({
             "success": False,
             "error": str(e)
+        }), 500
+
+@auth_bp.route('/debug/headers', methods=['GET', 'POST'])
+def debug_headers():
+    """除錯：檢查請求標頭"""
+    try:
+        headers_info = {
+            "method": request.method,
+            "all_headers": dict(request.headers),
+            "cookies": dict(request.cookies),
+            "origin": request.headers.get('Origin'),
+            "user_agent": request.headers.get('User-Agent'),
+            "cookie_header": request.headers.get('Cookie'),
+            "flask_session_keys": list(flask_session.keys()) if flask_session else [],
+            "flask_session_data": dict(flask_session) if flask_session else {}
+        }
+        
+        return jsonify({
+            "success": True,
+            "debug_info": headers_info
+        })
+    except Exception as e:
+        return jsonify({
+            "success": False,
+            "error": str(e)
         }), 500 
