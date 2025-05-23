@@ -4,7 +4,7 @@
 Flask 應用程式初始化模組
 """
 
-from flask import Flask, jsonify, send_from_directory, redirect, url_for, request
+from flask import Flask, jsonify, send_from_directory, redirect, url_for, request, make_response
 from flask_cors import CORS
 from .config import Config
 from .routes import auth_bp, file_bp, system_bp
@@ -20,25 +20,52 @@ def create_app(config_class=Config):
     app.config['SESSION_COOKIE_HTTPONLY'] = True
     app.config['SESSION_COOKIE_SAMESITE'] = 'Lax'
     
-    # 啟用CORS，並配置支持 credentials
+    # 方法 1: 使用 flask-cors (開發環境設定)
     CORS(app, 
          supports_credentials=True,
-         origins=['http://localhost:3000', 'http://localhost:5000', 'http://127.0.0.1:3000', 'http://127.0.0.1:5000'],
+         origins=['*'],  # 開發環境可以使用 *
          allow_headers=['Content-Type', 'Authorization', 'X-Requested-With'],
-         expose_headers=['Access-Control-Allow-Credentials'],
-         methods=['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS'])
+         methods=['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS']
+    )
     
-    # 自定義 CORS 標頭處理
+    # 方法 2: 手動設置 (更精確控制，處理各種特殊情況)
     @app.after_request
     def after_request(response):
         """確保每個回應都包含正確的 CORS 標頭"""
         origin = request.headers.get('Origin')
-        if origin in ['http://localhost:3000', 'http://localhost:5000', 'http://127.0.0.1:3000', 'http://127.0.0.1:5000']:
+        
+        # 處理各種 origin 情況
+        if origin:
             response.headers['Access-Control-Allow-Origin'] = origin
+        else:
+            # 處理 file:// 協議或其他 origin 為 null 的情況
+            response.headers['Access-Control-Allow-Origin'] = '*'
+        
         response.headers['Access-Control-Allow-Credentials'] = 'true'
         response.headers['Access-Control-Allow-Methods'] = 'GET, POST, PUT, DELETE, OPTIONS'
         response.headers['Access-Control-Allow-Headers'] = 'Content-Type, Authorization, X-Requested-With'
+        
         return response
+    
+    # 處理 OPTIONS 預檢請求
+    @app.before_request
+    def handle_options():
+        """處理 CORS 預檢請求"""
+        if request.method == 'OPTIONS':
+            response = make_response()
+            origin = request.headers.get('Origin')
+            
+            if origin:
+                response.headers['Access-Control-Allow-Origin'] = origin
+            else:
+                # 處理 file:// 協議 (origin 為 null)
+                response.headers['Access-Control-Allow-Origin'] = '*'
+            
+            response.headers['Access-Control-Allow-Credentials'] = 'true'
+            response.headers['Access-Control-Allow-Methods'] = 'GET, POST, PUT, DELETE, OPTIONS'
+            response.headers['Access-Control-Allow-Headers'] = 'Content-Type, Authorization, X-Requested-With'
+            
+            return response
     
     # 註冊藍圖
     app.register_blueprint(auth_bp)
