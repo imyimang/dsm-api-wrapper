@@ -6,121 +6,44 @@ Flask 應用程式初始化模組
 
 from flask import Flask, jsonify, send_from_directory, redirect, url_for, request, make_response
 from flask_cors import CORS
-from .config import Config
-from .routes import auth_bp, file_bp, system_bp
+from flask_session import Session  # 🔥 引入 Flask-Session
 import os
-from datetime import timedelta
+import logging
+from .config import Config
 
 def create_app(config_class=Config):
     """應用程式工廠函數"""
-    app = Flask(__name__)
-    app.config.from_object(config_class)
+    app = Flask(__name__, static_folder='../static', static_url_path='')
     
-    # 🔥 關鍵修復：確保 Flask session 正確配置
-    app.secret_key = app.config['SECRET_KEY']
-    app.config['SESSION_TYPE'] = 'filesystem'
-    app.config['SESSION_PERMANENT'] = True
-    app.config['PERMANENT_SESSION_LIFETIME'] = timedelta(seconds=app.config['PERMANENT_SESSION_LIFETIME'])
+    # 🔥 確保 SECRET_KEY 設置
+    app.config['SECRET_KEY'] = Config.SECRET_KEY
     
-    # 🚀 跨域 Cookie 修復：關鍵設置
-    app.config['SESSION_COOKIE_SECURE'] = False  # 開發環境不使用 HTTPS
-    app.config['SESSION_COOKIE_HTTPONLY'] = True
-    app.config['SESSION_COOKIE_SAMESITE'] = 'None'  # 🔥 關鍵修復：允許跨域
-    app.config['SESSION_COOKIE_DOMAIN'] = None  # 明確設為 None
-    app.config['SESSION_COOKIE_PATH'] = '/'  # 明確設置路徑
-    app.config['SESSION_COOKIE_NAME'] = 'session'  # 明確設置 cookie 名稱
+    # 🔥 配置 Session
+    app.config['SESSION_TYPE'] = Config.SESSION_TYPE
+    app.config['SESSION_FILE_DIR'] = Config.SESSION_FILE_DIR
+    app.config['SESSION_COOKIE_NAME'] = Config.SESSION_COOKIE_NAME
+    app.config['SESSION_COOKIE_HTTPONLY'] = Config.SESSION_COOKIE_HTTPONLY
+    app.config['SESSION_COOKIE_SECURE'] = Config.SESSION_COOKIE_SECURE
+    app.config['SESSION_COOKIE_SAMESITE'] = Config.SESSION_COOKIE_SAMESITE
+    app.config['PERMANENT_SESSION_LIFETIME'] = Config.PERMANENT_SESSION_LIFETIME
+    app.config['SESSION_COOKIE_DOMAIN'] = Config.SESSION_COOKIE_DOMAIN
+    app.config['SESSION_FILE_THRESHOLD'] = Config.SESSION_FILE_THRESHOLD
     
-    # 🌐 CORS 配置修復
-    CORS(app, 
-         supports_credentials=True,
-         origins=['http://localhost:3000', 'http://127.0.0.1:3000', 'http://localhost:8080', 'null'],  # 具體 origins
-         allow_headers=['Content-Type', 'Authorization', 'X-Requested-With'],
-         methods=['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS'],
-         send_wildcard=False  # 確保不發送通配符
-    )
+    # 🔥 初始化 Flask-Session
+    os.makedirs(Config.SESSION_FILE_DIR, exist_ok=True)  # 確保目錄存在
+    Session(app)
     
-    # 🛠️ 手動 CORS 處理 (處理邊緣案例)
-    @app.after_request
-    def after_request(response):
-        """確保每個回應都包含正確的 CORS 標頭"""
-        origin = request.headers.get('Origin')
-        
-        # 允許的 origins 列表
-        allowed_origins = [
-            'http://localhost:3000', 
-            'http://127.0.0.1:3000', 
-            'http://localhost:8080',
-            'file://',  # 本地文件協議
-            'null'      # 某些情況下的 origin
-        ]
-        
-        # 處理 origin
-        if origin and origin in allowed_origins:
-            response.headers['Access-Control-Allow-Origin'] = origin
-        elif origin is None or origin == 'null':
-            # 處理 file:// 協議或 origin 為 null 的情況
-            response.headers['Access-Control-Allow-Origin'] = 'null'
-        
-        # 設置 credentials 和其他 CORS 標頭
-        response.headers['Access-Control-Allow-Credentials'] = 'true'
-        response.headers['Access-Control-Allow-Methods'] = 'GET, POST, PUT, DELETE, OPTIONS'
-        response.headers['Access-Control-Allow-Headers'] = 'Content-Type, Authorization, X-Requested-With'
-        
-        # 🔥 重要：確保 Set-Cookie 有正確的屬性
-        if response.headers.get('Set-Cookie'):
-            # Flask 會自動處理，但我們確保屬性正確
-            pass
-        
-        return response
-    
-    # 🔧 OPTIONS 預檢請求處理
-    @app.before_request
-    def handle_options():
-        """處理 CORS 預檢請求"""
-        if request.method == 'OPTIONS':
-            response = make_response()
-            origin = request.headers.get('Origin')
-            
-            allowed_origins = [
-                'http://localhost:3000', 
-                'http://127.0.0.1:3000', 
-                'http://localhost:8080',
-                'file://',
-                'null'
-            ]
-            
-            if origin and origin in allowed_origins:
-                response.headers['Access-Control-Allow-Origin'] = origin
-            elif origin is None or origin == 'null':
-                response.headers['Access-Control-Allow-Origin'] = 'null'
-            
-            response.headers['Access-Control-Allow-Credentials'] = 'true'
-            response.headers['Access-Control-Allow-Methods'] = 'GET, POST, PUT, DELETE, OPTIONS'
-            response.headers['Access-Control-Allow-Headers'] = 'Content-Type, Authorization, X-Requested-With'
-            
-            return response
+    # 🔥 配置 CORS 允許憑證 (credentials)
+    CORS(app, supports_credentials=True)
     
     # 註冊藍圖
+    from .routes import auth_bp, file_bp, system_bp
     app.register_blueprint(auth_bp)
     app.register_blueprint(file_bp)
     app.register_blueprint(system_bp)
     
-    # 註冊錯誤處理器
-    register_error_handlers(app)
-    
-    # 靜態文件路由
-    @app.route('/static/<path:filename>')
-    def static_files(filename):
-        """提供靜態文件"""
-        return send_from_directory('../static', filename)
-    
-    # 網頁應用路由
-    @app.route('/app')
-    def web_app():
-        """網頁應用主頁"""
-        return send_from_directory('../static', 'index.html')
-    
-    # 註冊主頁路由 - API 文檔
+    # 主頁路由
+
     @app.route('/', methods=['GET'])
     def index():
         """API文檔首頁"""
@@ -186,7 +109,11 @@ def create_app(config_class=Config):
         }
         
         return jsonify(api_docs)
-
+    
+    @app.route('/app')
+    def app_route():
+        return app.send_static_file('index.html')
+        
     return app
 
 def register_error_handlers(app):

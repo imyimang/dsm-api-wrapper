@@ -18,7 +18,6 @@ def get_nas_session():
     auth_header = request.headers.get('Authorization', '')
     if auth_header.startswith('Bearer '):
         token = auth_header[7:]
-        # 需要從 auth_routes 模組導入 active_tokens 和相關函數
         from .auth_routes import active_tokens, cleanup_expired_tokens
         
         cleanup_expired_tokens()
@@ -30,33 +29,99 @@ def get_nas_session():
     
     # 2. 回退到 Cookie Session 認證
     session_data = flask_session.get('nas_session')
+    nas_service.debug_log("獲取 Flask session", {
+        "session_exists": bool(session_data),
+        "session_data": session_data,
+        "flask_session_keys": list(flask_session.keys())
+    })
+    
     if not session_data:
+        nas_service.debug_log("無 Flask session 資料")
         return None
     
+    # 🔥 恢復 NAS 服務狀態
     nas_service.sid = session_data.get('sid')
     nas_service.syno_token = session_data.get('syno_token')
+    
+    nas_service.debug_log("恢復 NAS session 狀態", {
+        "sid_exists": bool(nas_service.sid),
+        "syno_token_exists": bool(nas_service.syno_token),
+        "sid_preview": nas_service.sid[:20] + "..." if nas_service.sid else None,
+        "syno_token_preview": nas_service.syno_token[:8] + "..." if nas_service.syno_token else None
+    })
+    
+    # 🔥 關鍵修正：不要在這裡驗證 Session 有效性！
+    # 這會導致剛登入的 Session 被錯誤判斷為無效
     return nas_service
 
 @file_bp.route('/files', methods=['GET'])
 def api_list_files():
     """列出檔案"""
     try:
+        # 🔥 嘗試三種方式獲取 session
         service = get_nas_session()
+        
+        # 1. 從 cookie 獲取
+        session_data = flask_session.get('nas_session')
+        nas_service.debug_log("獲取 Flask session", {
+            "session_exists": bool(session_data),
+            "session_data": session_data,
+            "flask_session_keys": list(flask_session.keys())
+        })
+        
+        # 2. 從 URL 參數獲取
+        if not service and request.args.get('sid') and request.args.get('token'):
+            nas_service.sid = request.args.get('sid')
+            nas_service.syno_token = request.args.get('token')
+            service = nas_service
+            nas_service.debug_log("從 URL 參數恢復 session", {
+                "sid_exists": bool(nas_service.sid),
+                "token_exists": bool(nas_service.syno_token)
+            })
+        
+        # 3. 如果都沒有，則返回未登入
         if not service:
+            nas_service.debug_log("無法獲取 NAS session")
             return jsonify({"success": False, "message": "未登入"}), 401
         
+        # 🔥 在實際調用時才驗證 Session，而不是在獲取時驗證
+        if not service.sid or not service.syno_token:
+            nas_service.debug_log("NAS session 資料不完整", {
+                "sid_exists": bool(service.sid),
+                "syno_token_exists": bool(service.syno_token)
+            })
+            return jsonify({"success": False, "message": "登入資訊不完整"}), 401
+        
         path = request.args.get('path', '/home/www')
+        nas_service.debug_log("開始獲取檔案列表", {"path": path})
+        
+        # 🔥 使用 nas_service 中的自動重登機制
         result = service.list_directory(path)
         
         return jsonify({
             "success": True,
-            "data": result
+            "data": result,
+            "current_path": path,
+            # 🔥 返回 sid 和 token，供前端保存
+            "sid": service.sid,
+            "token": service.syno_token
         })
+        
     except Exception as e:
-        return jsonify({
-            "success": False,
-            "message": f"獲取檔案列表失敗：{str(e)}"
-        }), 400
+        error_msg = str(e)
+        nas_service.debug_log("檔案列表錯誤", error_msg)
+        
+        # 檢查是否為 Session 相關錯誤
+        if "Session" in error_msg or "登入" in error_msg or "119" in error_msg:
+            return jsonify({
+                "success": False,
+                "message": error_msg
+            }), 401
+        else:
+            return jsonify({
+                "success": False,
+                "message": f"載入失敗：{error_msg}"
+            }), 400
 
 @file_bp.route('/upload', methods=['POST'])
 def api_upload():

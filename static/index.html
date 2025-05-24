@@ -549,6 +549,12 @@
                 this.baseURL = window.location.origin;
                 this.currentPath = '/home/www';
                 this.isLoggedIn = false;
+                this.storedCredentials = null;  // 儲存登入憑證
+                this.autoRetryCount = 0;  // 防止無限重試
+                this.sessionInfo = {  // 🔥 添加 session 信息
+                    sid: null,
+                    token: null
+                };
                 this.init();
             }
 
@@ -634,7 +640,14 @@
 
             async checkSession() {
                 try {
-                    const response = await fetch(`${this.baseURL}/api/session/check`);
+                    const response = await fetch(`${this.baseURL}/api/session/check`, {
+                        method: 'GET',
+                        credentials: 'include',  // 🔥 確保發送 cookies
+                        headers: {
+                            'Cache-Control': 'no-cache',
+                            'X-Requested-With': 'XMLHttpRequest'
+                        }
+                    });
                     const data = await response.json();
                     
                     if (data.success) {
@@ -660,6 +673,7 @@
                 try {
                     const response = await fetch(`${this.baseURL}/api/login`, {
                         method: 'POST',
+                        credentials: 'include',  // 🔥 確保 Cookie 被發送
                         headers: {
                             'Content-Type': 'application/json',
                         },
@@ -673,9 +687,25 @@
                     
                     if (data.success) {
                         this.isLoggedIn = true;
+                        this.storedCredentials = {
+                            username: username,
+                            password: password
+                        };
+                        this.autoRetryCount = 0;
+                        
+                        // 🔥 清空 session 信息，等待重新加載
+                        this.sessionInfo = {
+                            sid: null,
+                            token: null
+                        };
+                        
                         this.showMessage('success', `登入成功！歡迎 ${username}`);
                         this.showMainContent();
-                        this.loadFiles();
+                        
+                        // 增加更長的延遲，讓 Session 穩定
+                        setTimeout(() => {
+                            this.loadFiles();
+                        }, 3000);
                     } else {
                         this.showMessage('error', `登入失敗: ${data.message}`, 'loginMessage');
                     }
@@ -683,6 +713,44 @@
                     this.showMessage('error', `連線錯誤: ${error.message}`, 'loginMessage');
                 } finally {
                     this.setLoading('login', false);
+                }
+            }
+
+            async autoRelogin() {
+                if (!this.storedCredentials || this.autoRetryCount >= 3) {
+                    console.log('無法自動重登：', !this.storedCredentials ? '無憑證' : '重試次數已達上限');
+                    return false;
+                }
+                
+                this.autoRetryCount++;
+                console.log(`嘗試自動重登 (第 ${this.autoRetryCount} 次)`);
+                
+                try {
+                    const response = await fetch(`${this.baseURL}/api/login`, {
+                        method: 'POST',
+                        credentials: 'include',
+                        headers: {
+                            'Content-Type': 'application/json',
+                        },
+                        body: JSON.stringify({
+                            account: this.storedCredentials.username,
+                            password: this.storedCredentials.password
+                        })
+                    });
+                    
+                    const data = await response.json();
+                    
+                    if (data.success) {
+                        console.log('自動重登成功');
+                        this.isLoggedIn = true;
+                        return true;
+                    } else {
+                        console.log('自動重登失敗:', data.message);
+                        return false;
+                    }
+                } catch (error) {
+                    console.error('自動重登錯誤:', error);
+                    return false;
                 }
             }
 
@@ -694,30 +762,83 @@
                     this.showMessage('info', '已成功登出');
                 } catch (error) {
                     console.error('登出錯誤:', error);
+                } finally {
+                    this.storedCredentials = null;  // 🔥 清除儲存的憑證
+                    this.autoRetryCount = 0;
                 }
             }
 
             async loadFiles() {
                 if (!this.isLoggedIn) return;
-
+                
                 const fileList = document.getElementById('fileList');
                 fileList.innerHTML = '<div style="text-align: center;"><span class="loading"></span> 載入中...</div>';
-
-                try {
-                    const response = await fetch(`${this.baseURL}/api/files?path=${encodeURIComponent(this.currentPath)}`);
-                    const data = await response.json();
-
-                    if (data.success) {
-                        this.displayFiles(data.data.files);
-                        this.updateCurrentPath();
-                        this.updateBreadcrumb();
-                    } else {
-                        this.showMessage('error', `載入失敗: ${data.message}`);
-                        fileList.innerHTML = '<div style="text-align: center; color: #e53e3e;">載入失敗</div>';
+                
+                // 🔥 支援自動重試
+                for (let attempt = 0; attempt < 2; attempt++) {
+                    try {
+                        // 🔥 添加 sid 和 token 參數
+                        let url = `${this.baseURL}/api/files?path=${encodeURIComponent(this.currentPath)}`;
+                        if (this.sessionInfo.sid && this.sessionInfo.token) {
+                            url += `&sid=${encodeURIComponent(this.sessionInfo.sid)}&token=${encodeURIComponent(this.sessionInfo.token)}`;
+                        }
+                        
+                        const response = await fetch(url, {
+                            method: 'GET',
+                            credentials: 'include',
+                            headers: {
+                                'Accept': 'application/json',
+                                'Cache-Control': 'no-cache'
+                            }
+                        });
+                        
+                        const data = await response.json();
+                        console.log('檔案列表回應:', data);
+                        
+                        if (data.success) {
+                            // 🔥 保存返回的 sid 和 token
+                            if (data.sid && data.token) {
+                                console.log('更新 session 信息');
+                                this.sessionInfo.sid = data.sid;
+                                this.sessionInfo.token = data.token;
+                            }
+                            
+                            // 成功載入檔案
+                            this.displayFiles(data.data.files);
+                            this.updateCurrentPath();
+                            this.updateBreadcrumb();
+                            this.autoRetryCount = 0;  // 重置重試計數
+                            return;
+                        } else {
+                            // 檢查是否為 Session 過期
+                            if ((data.message.includes('Session') || data.message.includes('登入')) && attempt === 0) {
+                                console.log('檢測到 Session 過期，嘗試自動重登');
+                                
+                                if (await this.autoRelogin()) {
+                                    console.log('自動重登成功，重新載入檔案');
+                                    continue;  // 重試載入檔案
+                                }
+                            }
+                            
+                            // 無法自動恢復，顯示錯誤
+                            this.isLoggedIn = false;
+                            this.showLoginSection();
+                            this.showMessage('error', '登入已過期，請重新登入');
+                            return;
+                        }
+                    } catch (error) {
+                        if (attempt === 0 && this.storedCredentials) {
+                            console.log('網路錯誤，嘗試自動重登');
+                            if (await this.autoRelogin()) {
+                                continue;
+                            }
+                        }
+                        
+                        console.error('載入檔案錯誤:', error);
+                        this.showMessage('error', `載入錯誤: ${error.message}`);
+                        fileList.innerHTML = '<div style="text-align: center; color: #e53e3e;">載入錯誤</div>';
+                        return;
                     }
-                } catch (error) {
-                    this.showMessage('error', `載入錯誤: ${error.message}`);
-                    fileList.innerHTML = '<div style="text-align: center; color: #e53e3e;">載入錯誤</div>';
                 }
             }
 

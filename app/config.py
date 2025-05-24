@@ -17,7 +17,19 @@ class Config:
     NAS_TIMEOUT = 10
     
     # Session 配置
-    PERMANENT_SESSION_LIFETIME = 86400  # 24小時
+    SESSION_COOKIE_NAME = "dsm_session"
+    SESSION_COOKIE_HTTPONLY = True
+    SESSION_COOKIE_SECURE = False  # 容器環境中可能需要設為 False
+    SESSION_COOKIE_SAMESITE = None  # 允許跨站請求
+    PERMANENT_SESSION_LIFETIME = 86400  # 24小時，秒為單位
+    
+    # 重要：如果在容器中使用，禁用 Flask 默認 SESSION_COOKIE_DOMAIN
+    SESSION_COOKIE_DOMAIN = None  # 允許任何域名使用 cookie
+    
+    # 使用 FileSystem 而非默認的 cookie session
+    SESSION_TYPE = "filesystem"
+    SESSION_FILE_DIR = "/tmp/flask_session"
+    SESSION_FILE_THRESHOLD = 500  # 最多存储多少個 session
 
 # 日誌配置
 def setup_logging():
@@ -28,4 +40,4 @@ def setup_logging():
     )
     return logging.getLogger(__name__)
 
-logger = setup_logging() 
+logger = setup_logging()

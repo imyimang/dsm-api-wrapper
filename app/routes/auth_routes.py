@@ -111,6 +111,9 @@ def api_login():
         # 確保 session 永久化（在 session 存活期內）
         flask_session.permanent = True
         
+        # 強制 session 保存 (新增)
+        flask_session.modified = True
+        
         # 驗證 session 是否被正確設置
         verification = flask_session.get('nas_session')
         nas_service.debug_log("Flask session 設置驗證", {
@@ -119,6 +122,7 @@ def api_login():
             "session_keys": list(flask_session.keys())
         })
         
+        # 返回成功回應，但不返回完整 token (安全考慮)
         return jsonify({
             "success": True,
             "message": "登入成功",
@@ -131,7 +135,7 @@ def api_login():
         nas_service.debug_log("登入錯誤", str(e))
         return jsonify({
             "success": False,
-            "message": f"登入失敗：{str(e)}"
+            "message": f"登入失敗: {str(e)}"
         }), 400
 
 @auth_bp.route('/logout', methods=['POST'])
@@ -459,4 +463,4 @@ def api_login_token():
         return jsonify({
             "success": False,
             "message": f"登入失敗：{str(e)}"
-        }), 400 
+        }), 400

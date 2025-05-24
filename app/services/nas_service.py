@@ -27,6 +27,8 @@ class NASApiService:
         self.client = requests.Session()
         self.client.verify = False
         self.client.timeout = Config.NAS_TIMEOUT
+
+        self._stored_credentials = None  # 🔥 儲存登入憑證
     
     def debug_log(self, message, data=None):
         """Debug日誌方法"""
@@ -42,7 +44,7 @@ class NASApiService:
         logger.info(f"Debug模式: {'開啟' if self.debug_mode else '關閉'}")
         return self.debug_mode
     
-    def login(self, account, password):
+    def login(self, account, password, store_credentials=True):
         """登入NAS系統"""
         try:
             login_params = {
@@ -74,6 +76,13 @@ class NASApiService:
             
             logger.info(f"登入成功 sid={self.sid} syno_token={self.syno_token}")
             
+            # 🔥 儲存憑證以供自動重登使用
+            if store_credentials:
+                self._stored_credentials = {
+                    'account': account,
+                    'password': password
+                }
+            
             return {
                 "success": True,
                 "sid": self.sid,
@@ -83,48 +92,104 @@ class NASApiService:
             logger.error(f"登入錯誤: {str(e)}")
             raise e
     
+    def _auto_relogin(self):
+        """自動重新登入"""
+        if not self._stored_credentials:
+            self.debug_log("無儲存的憑證，無法自動重登")
+            return False
+        
+        try:
+            self.debug_log("嘗試自動重新登入")
+            result = self.login(
+                self._stored_credentials['account'], 
+                self._stored_credentials['password'],
+                store_credentials=False  # 避免重複儲存
+            )
+            self.debug_log("自動重新登入成功")
+            return True
+        except Exception as e:
+            self.debug_log("自動重新登入失敗", str(e))
+            self._stored_credentials = None  # 清除無效憑證
+            return False
+    
     def list_directory(self, path="/home/www"):
-        """獲取目錄列表"""
+        """獲取目錄列表 - 支援自動重登"""
         if not self.sid or not self.syno_token:
             raise Exception("請先登入")
         
-        try:
-            self.debug_log("開始獲取目錄", {"path": path})
-            
-            params = {
-                "api": "SYNO.FileStation.List",
-                "version": "2",
-                "method": "list",
-                "folder_path": path,
-                "filetype": "all",
-                "sort_by": "type",
-                "sort_direction": "ASC",
-                "offset": 0,
-                "limit": 1000,
-                "check_dir": "true",
-                "action": "list",
-                "additional": '["real_path","size","owner","time","perm","type","mount_point_type","description","indexed"]',
-                "_sid": self.sid
-            }
-            
-            headers = {
-                "X-SYNO-TOKEN": self.syno_token,
-                "X-Requested-With": "XMLHttpRequest"
-            }
-            
-            response = self.client.get(self.base_url, params=params, headers=headers)
-            response.raise_for_status()
-            
-            self.debug_log("完整additional參數調用回應", response.json())
-            
-            if not response.json().get("success"):
-                error_code = response.json().get("error", {}).get("code", "未知錯誤")
-                raise Exception(f"獲取目錄失敗: {error_code}")
-            
-            return response.json()["data"]
-        except Exception as e:
-            self.debug_log("獲取目錄錯誤", str(e))
-            raise e
+        # 🔥 修正：減少不必要的驗證，直接嘗試操作
+        for attempt in range(2):
+            try:
+                self.debug_log("開始獲取目錄", {
+                    "path": path,
+                    "attempt": attempt + 1,
+                    "sid_preview": self.sid[:20] + "..." if self.sid else None
+                })
+                
+                # 🔥 直接構建請求，不要提前驗證
+                params = {
+                    "api": "SYNO.FileStation.List",
+                    "version": "2",
+                    "method": "list",
+                    "folder_path": path,
+                    "filetype": "all",
+                    "sort_by": "name",  # 改為簡單的 name 排序
+                    "sort_direction": "ASC",
+                    "offset": 0,
+                    "limit": 1000,
+                    "additional": '["real_path","size","owner","time","perm","type"]',  # 🔥 簡化 additional 參數
+                    "_sid": self.sid
+                }
+                
+                headers = {
+                    "X-SYNO-TOKEN": self.syno_token,
+                    "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36"
+                }
+                
+                response = self.client.get(self.base_url, params=params, headers=headers, timeout=30)
+                response.raise_for_status()
+                
+                response_data = response.json()
+                self.debug_log("目錄列表 API 回應", {
+                    "success": response_data.get("success"),
+                    "error_code": response_data.get("error", {}).get("code") if not response_data.get("success") else None,
+                    "files_count": len(response_data.get("data", {}).get("files", [])) if response_data.get("success") else 0,
+                    "attempt": attempt + 1
+                })
+                
+                if not response_data.get("success"):
+                    error_code = response_data.get("error", {}).get("code", "未知錯誤")
+                    
+                    # 🔥 只有在確認是 Session 錯誤且有憑證時才自動重登
+                    if error_code == 119 and attempt == 0 and self._stored_credentials:
+                        self.debug_log("檢測到 Session 錯誤 119，嘗試自動重登")
+                        if self._auto_relogin():
+                            self.debug_log("自動重登成功，重試操作")
+                            continue  # 重試
+                    
+                    # 清除無效的 Session
+                    if error_code == 119:
+                        self.debug_log("清除無效的 Session 資料")
+                        self.sid = None
+                        self.syno_token = None
+                    
+                    raise Exception(f"獲取目錄失敗: {error_code}")
+                
+                # 成功返回結果
+                self.debug_log("目錄列表獲取成功")
+                return response_data["data"]
+                
+            except Exception as e:
+                if attempt == 0 and "119" in str(e) and self._stored_credentials:
+                    self.debug_log("第一次嘗試失敗，準備重登", str(e))
+                    continue  # 在 for 循環中已處理重登邏輯
+                
+                # 最終失敗
+                self.debug_log("獲取目錄最終失敗", {
+                    "error": str(e),
+                    "attempt": attempt + 1
+                })
+                raise e
     
     def upload_file(self, file_data, file_name, target_path="/home/www", overwrite=True):
         """上傳檔案"""
@@ -183,6 +248,8 @@ class NASApiService:
             logger.info("登出成功")
         except Exception as e:
             logger.error(f"登出錯誤: {str(e)}")
+        
+        self._stored_credentials = None  # 🔥 清除儲存的憑證
     
     def is_logged_in(self):
         """檢查是否已登入並驗證session有效性"""
