@@ -256,6 +256,209 @@ class NASApiTester:
             print(f"❌ 建立資料夾測試錯誤: {e}")
             return False
     
+    def test_share_file(self, file_paths=None, with_password=False, with_expiry=False):
+        """測試檔案分享功能 (包含 QR Code)"""
+        print("🧪 測試檔案分享功能...")
+        
+        if not file_paths:
+            # 先獲取檔案列表來選擇要分享的檔案
+            print("   獲取可用檔案列表...")
+            files_response = self.session.get(f"{self.base_url}/api/files?path=/home/www")
+            
+            if files_response.status_code == 200:
+                files_data = files_response.json()
+                if files_data.get("success"):
+                    files = files_data["data"].get("files", [])
+                    available_files = [f for f in files if not f.get("isdir")]  # 只顯示檔案，不顯示資料夾
+                    
+                    if available_files:
+                        print("   可用的檔案:")
+                        for i, file_info in enumerate(available_files[:5]):
+                            print(f"     {i+1}. {file_info.get('name')}")
+                        
+                        # 使用第一個檔案作為測試
+                        test_file = available_files[0]["name"]
+                        file_paths = [f"/home/www/{test_file}"]
+                        print(f"   自動選擇測試檔案: {test_file}")
+                    else:
+                        print("❌ 目錄中沒有可用的檔案進行分享測試")
+                        return False
+                else:
+                    print(f"❌ 無法獲取檔案列表: {files_data.get('message')}")
+                    return False
+            else:
+                print("❌ 無法連接到檔案列表 API")
+                return False
+        
+        try:
+            share_data = {
+                "paths": file_paths
+            }
+            
+            # 添加可選參數
+            if with_password:
+                share_data["password"] = "test123"
+                print("   🔒 使用密碼保護: test123")
+            
+            if with_expiry:
+                # 設定30天後過期
+                from datetime import datetime, timedelta
+                expiry_date = (datetime.now() + timedelta(days=30)).strftime("%Y-%m-%d")
+                share_data["date_expired"] = expiry_date
+                print(f"   ⏰ 設定過期時間: {expiry_date}")
+            
+            print(f"   📤 嘗試分享檔案: {file_paths}")
+            
+            response = self.session.post(
+                f"{self.base_url}/api/share",
+                json=share_data,
+                headers={"Content-Type": "application/json"}
+            )
+            
+            if response.status_code == 200:
+                data = response.json()
+                if data.get("success"):
+                    print(f"✅ 檔案分享成功: {data.get('message')}")
+                    
+                    # 分析分享數據
+                    share_info = data.get("data", {})
+                    links = share_info.get("links", [])
+                    
+                    if links:
+                        for i, link in enumerate(links):
+                            print(f"   📋 分享連結 {i+1}:")
+                            print(f"      🔗 URL: {link.get('url', 'N/A')}")
+                            print(f"      🆔 ID: {link.get('id', 'N/A')}")
+                            print(f"      📄 檔案名: {link.get('name', 'N/A')}")
+                            print(f"      📅 過期時間: {link.get('date_expired', '無限期')}")
+                            print(f"      🔐 密碼保護: {'是' if link.get('has_password') else '否'}")
+                            print(f"      📊 狀態: {link.get('status', 'N/A')}")
+                            
+                            # 檢查 QR Code
+                            qr_code = link.get('qrcode')
+                            if qr_code:
+                                if qr_code.startswith('data:image/png;base64,'):
+                                    # 計算 base64 長度來確認 QR Code 存在
+                                    base64_part = qr_code.split(',')[1] if ',' in qr_code else ''
+                                    qr_size = len(base64_part)
+                                    print(f"      📱 QR Code: ✅ 已生成 (大小: {qr_size} 字元)")
+                                    
+                                    # 可選：儲存 QR Code 到檔案 (用於調試)
+                                    if input("   是否要儲存 QR Code 到檔案? (y/N): ").lower() == 'y':
+                                        try:
+                                            import base64
+                                            qr_filename = f"qr_code_{link.get('id', 'unknown')}.png"
+                                            qr_binary = base64.b64decode(base64_part)
+                                            with open(qr_filename, 'wb') as f:
+                                                f.write(qr_binary)
+                                            print(f"      💾 QR Code 已儲存至: {qr_filename}")
+                                        except Exception as e:
+                                            print(f"      ❌ QR Code 儲存失敗: {e}")
+                                else:
+                                    print(f"      📱 QR Code: ⚠️ 格式異常: {qr_code[:50]}...")
+                            else:
+                                print(f"      📱 QR Code: ❌ 未提供")
+                            
+                            print()  # 空行分隔
+                        
+                        print(f"   📊 總計分享連結數量: {len(links)}")
+                        return True
+                    else:
+                        print("❌ 分享成功但沒有返回連結資訊")
+                        return False
+                else:
+                    print(f"❌ 檔案分享失敗: {data.get('message')}")
+                    return False
+            elif response.status_code == 401:
+                print(f"❌ 檔案分享失敗: 未登入或 Session 無效")
+                return False
+            else:
+                print(f"❌ 檔案分享請求失敗: {response.status_code}")
+                try:
+                    error_data = response.json()
+                    print(f"   錯誤訊息: {error_data.get('message')}")
+                except json.JSONDecodeError:
+                    print("   無法解析錯誤回應")
+                return False
+        except Exception as e:
+            print(f"❌ 檔案分享測試錯誤: {e}")
+            return False
+    
+    def test_share_multiple_files(self):
+        """測試多檔案分享功能"""
+        print("🧪 測試多檔案分享功能...")
+        
+        try:
+            # 獲取檔案列表
+            files_response = self.session.get(f"{self.base_url}/api/files?path=/home/www")
+            
+            if files_response.status_code == 200:
+                files_data = files_response.json()
+                if files_data.get("success"):
+                    files = files_data["data"].get("files", [])
+                    available_files = [f for f in files if not f.get("isdir")]
+                    
+                    if len(available_files) >= 2:
+                        # 選擇前兩個檔案進行測試
+                        test_files = [f"/home/www/{f['name']}" for f in available_files[:2]]
+                        print(f"   選擇測試檔案: {[f.split('/')[-1] for f in test_files]}")
+                        
+                        return self.test_share_file(
+                            file_paths=test_files,
+                            with_password=True,
+                            with_expiry=True
+                        )
+                    else:
+                        print("❌ 沒有足夠的檔案進行多檔案分享測試 (需要至少2個檔案)")
+                        return False
+                else:
+                    print(f"❌ 無法獲取檔案列表: {files_data.get('message')}")
+                    return False
+            else:
+                print("❌ 無法連接到檔案列表 API")
+                return False
+        except Exception as e:
+            print(f"❌ 多檔案分享測試錯誤: {e}")
+            return False
+    
+    def test_share_folder(self):
+        """測試資料夾分享功能"""
+        print("🧪 測試資料夾分享功能...")
+        
+        try:
+            # 獲取檔案列表尋找資料夾
+            files_response = self.session.get(f"{self.base_url}/api/files?path=/home/www")
+            
+            if files_response.status_code == 200:
+                files_data = files_response.json()
+                if files_data.get("success"):
+                    files = files_data["data"].get("files", [])
+                    available_folders = [f for f in files if f.get("isdir")]
+                    
+                    if available_folders:
+                        # 選擇第一個資料夾進行測試
+                        test_folder = available_folders[0]["name"]
+                        folder_path = f"/home/www/{test_folder}"
+                        print(f"   選擇測試資料夾: {test_folder}")
+                        
+                        return self.test_share_file(
+                            file_paths=[folder_path],
+                            with_password=False,
+                            with_expiry=False
+                        )
+                    else:
+                        print("❌ 目錄中沒有可用的資料夾進行分享測試")
+                        return False
+                else:
+                    print(f"❌ 無法獲取檔案列表: {files_data.get('message')}")
+                    return False
+            else:
+                print("❌ 無法連接到檔案列表 API")
+                return False
+        except Exception as e:
+            print(f"❌ 資料夾分享測試錯誤: {e}")
+            return False
+    
     def run_all_tests(self):
         """執行所有測試"""
         print("🎯 開始執行 NAS API 測試套件")
@@ -273,10 +476,13 @@ class NASApiTester:
         if results[-1][1]:  # 如果登入成功
             results.append(("Session檢查", self.test_session_check()))
             results.append(("檔案列表", self.test_list_files()))
-            # 新增測試案例到 run_all_tests
             # 為了避免自動測試時產生過多垃圾資料夾，可以考慮預設路徑和隨機名稱
             default_test_folder_name = f"autotest_folder_{int(time.time()) % 1000}"
             results.append(("建立資料夾", self.test_create_folder(parent_path="/home/www", folder_name=default_test_folder_name)))
+            # 新增分享測試
+            results.append(("檔案分享", self.test_share_file()))
+            results.append(("多檔案分享", self.test_share_multiple_files()))
+            results.append(("資料夾分享", self.test_share_folder()))
             results.append(("後台任務", self.test_background_tasks()))
             results.append(("Debug切換", self.test_debug_toggle()))
             results.append(("登出功能", self.test_logout()))
@@ -330,8 +536,9 @@ def main():
     print("1. 執行完整測試套件")
     print("2. 僅測試API文檔")
     print("3. 自定義測試")
+    print("4. 僅測試分享功能")
     
-    choice = input("\n請選擇 (1-3): ").strip()
+    choice = input("\n請選擇 (1-4): ").strip()
     
     if choice == "1":
         tester.run_all_tests()
@@ -347,6 +554,9 @@ def main():
         print("6. Debug切換")
         print("7. 登出功能")
         print("8. 建立資料夾")
+        print("9. 檔案分享")
+        print("10. 多檔案分享")
+        print("11. 資料夾分享")
         
         test_choice = input("請選擇測試編號: ").strip()
         
@@ -358,15 +568,37 @@ def main():
             "5": tester.test_background_tasks,
             "6": tester.test_debug_toggle,
             "7": tester.test_logout,
-            "8": tester.test_create_folder
+            "8": tester.test_create_folder,
+            "9": tester.test_share_file,
+            "10": tester.test_share_multiple_files,
+            "11": tester.test_share_folder
         }
         
         if test_choice in test_methods:
-            test_methods[test_choice]()
+            # 對於分享測試，先確保已登入
+            if test_choice in ["9", "10", "11"]:
+                print("分享測試需要先登入...")
+                if tester.test_login():
+                    test_methods[test_choice]()
+                else:
+                    print("❌ 登入失敗，無法執行分享測試")
+            else:
+                test_methods[test_choice]()
         else:
             print("❌ 無效的選擇")
+    elif choice == "4":
+        print("🧪 執行分享功能測試套件...")
+        if tester.test_login():
+            print("\n" + "-" * 30)
+            tester.test_share_file()
+            print("\n" + "-" * 30)
+            tester.test_share_multiple_files()
+            print("\n" + "-" * 30)
+            tester.test_share_folder()
+        else:
+            print("❌ 登入失敗，無法執行分享測試")
     else:
         print("❌ 無效的選擇")
 
 if __name__ == "__main__":
-    main() 
+    main()

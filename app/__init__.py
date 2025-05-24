@@ -127,10 +127,10 @@ def create_app(config_class=Config):
         api_docs = {
             "title": "Synology NAS Flask API Server",
             "description": "完整重構自 nasApi.js 的 Python Flask API",
-            "version": "1.3.0",
+            "version": "1.4.0",
             "web_app": {
                 "url": "/app",
-                "description": "網頁版 NAS 管理介面"
+                "description": "網頁版 NAS 管理介面 (含分享功能)"
             },
             "endpoints": {
                 "Authentication": {
@@ -147,12 +147,41 @@ def create_app(config_class=Config):
                 },
                 "File Operations": {
                     "POST /api/compress": "壓縮檔案/資料夾",
-                    "GET /api/download": "生成下載連結 (使用直接連結+SID方法)"
+                    "GET /api/download": "生成下載連結 (使用直接連結+SID方法)",
+                    "POST /api/share": "建立檔案/資料夾分享連結 (含QR Code)"
                 },
                 "System": {
                     "GET /api/tasks": "獲取後台任務列表",
                     "POST /api/debug/toggle": "切換debug模式"
                 }
+            },
+            "features": {
+                "sharing": {
+                    "description": "檔案分享功能",
+                    "supports": [
+                        "QR Code 生成 (base64 格式)",
+                        "密碼保護",
+                        "過期時間設定",
+                        "多檔案批次分享",
+                        "資料夾分享"
+                    ],
+                    "qr_code_format": "data:image/png;base64,..."
+                },
+                "web_interface": {
+                    "description": "完整的網頁管理介面",
+                    "features": [
+                        "響應式設計",
+                        "拖放上傳",
+                        "即時分享對話框",
+                        "QR Code 顯示",
+                        "一鍵複製分享連結"
+                    ]
+                }
+            },
+            "documentation": {
+                "api_docs": "/api (本頁面)",
+                "detailed_docs": "查看 API_DOCS.md 檔案",
+                "readme": "查看 README.md 檔案"
             }
         }
         
@@ -194,4 +223,4 @@ def register_error_handlers(app):
                 "code": "METHOD_NOT_ALLOWED",
                 "details": "請檢查HTTP方法是否正確"
             }
-        }), 405 
+        }), 405

@@ -222,3 +222,35 @@ def api_create_folder():
             "success": False,
             "message": f"建立資料夾失敗：{str(e)}"
         }), 400
+
+@file_bp.route('/share', methods=['POST'])
+def api_create_share_link():
+    """建立檔案/資料夾的分享連結"""
+    try:
+        service = get_nas_session()
+        if not service:
+            return jsonify({"success": False, "message": "未登入"}), 401
+        
+        data = request.get_json()
+        paths_to_share = data.get('paths') # 預期是一個路徑字串的列表
+        # password = data.get('password') # 可選
+        # date_expired = data.get('date_expired') # 可選
+        # ... 其他可選參數 ...
+
+        if not paths_to_share or not isinstance(paths_to_share, list) or not all(isinstance(p, str) for p in paths_to_share):
+            return jsonify({"success": False, "message": "缺少有效的 paths 參數 (必須是路徑字串列表)"}), 400
+        
+        # 目前服務層只接收 paths_to_share，未來可擴展
+        result = service.create_sharing_link(paths_to_share)
+        
+        # API 成功時 result 包含 {"links": [...], "has_folder": ...}
+        return jsonify({
+            "success": True,
+            "message": "分享連結建立成功",
+            "data": result 
+        })
+    except Exception as e:
+        return jsonify({
+            "success": False,
+            "message": f"建立分享連結失敗：{str(e)}"
+        }), 400

@@ -301,6 +301,92 @@
             color: #a0aec0;
         }
 
+        /* 新增：分享對話框樣式 */
+        .share-dialog {
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            z-index: 1000;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+        }
+
+        .share-dialog-overlay {
+            position: absolute;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background: rgba(0, 0, 0, 0.5);
+            backdrop-filter: blur(5px);
+        }
+
+        .share-dialog-content {
+            position: relative;
+            background: white;
+            border-radius: 15px;
+            padding: 30px;
+            max-width: 500px;
+            width: 90%;
+            box-shadow: 0 10px 30px rgba(0, 0, 0, 0.3);
+            z-index: 1001;
+        }
+
+        .share-dialog-content h3 {
+            margin-bottom: 20px;
+            color: #4a5568;
+            text-align: center;
+        }
+
+        .share-info {
+            margin-bottom: 20px;
+        }
+
+        .share-link-container {
+            display: flex;
+            gap: 10px;
+            align-items: center;
+        }
+
+        .share-link-container input {
+            flex: 1;
+            padding: 10px;
+            border: 1px solid #e2e8f0;
+            border-radius: 8px;
+            background: #f7fafc;
+        }
+
+        .share-id, .expire-time {
+            color: #4a5568;
+            font-family: monospace;
+            background: #f7fafc;
+            padding: 5px 10px;
+            border-radius: 5px;
+            display: inline-block;
+        }
+
+        .qr-code {
+            text-align: center;
+            padding: 10px;
+            background: #f7fafc;
+            border-radius: 5px;
+        }
+
+        .qr-code img {
+            border: 1px solid #e2e8f0;
+            border-radius: 5px;
+            max-width: 150px;
+        }
+
+        .share-actions {
+            display: flex;
+            gap: 10px;
+            justify-content: flex-end;
+        }
+
         @media (max-width: 768px) {
             .container {
                 padding: 10px;
@@ -325,6 +411,20 @@
                 margin-top: 10px;
                 width: 100%;
                 justify-content: flex-end;
+            }
+
+            .share-dialog-content {
+                width: 95%;
+                padding: 20px;
+            }
+            
+            .share-link-container {
+                flex-direction: column;
+                align-items: stretch;
+            }
+            
+            .share-actions {
+                flex-direction: column;
             }
         }
     </style>
@@ -664,6 +764,7 @@
                                     `<button class="btn btn-small btn-secondary" onclick="nasManager.enterDirectory('${file.name}')">📂 進入</button>` :
                                     `<button class="btn btn-small btn-success" onclick="nasManager.downloadFile('${file.name}')">📥 下載</button>`
                                 }
+                                <button class="btn btn-small" style="background: linear-gradient(135deg, #4299e1 0%, #3182ce 100%); color: white;" onclick="nasManager.shareFile('${file.name}')">🔗 分享</button>
                                 <button class="btn btn-small btn-danger" onclick="nasManager.deleteFile('${file.name}')">🗑️ 刪除</button>
                             </div>
                         </div>
@@ -1061,10 +1162,133 @@
                     // 如果沒有專門的 createFolder loading, 可以移除這兩行 setLoading
                 }
             }
+
+            async shareFile(filename) {
+                try {
+                    const filePath = this.currentPath.endsWith('/') ? 
+                        this.currentPath + filename : 
+                        this.currentPath + '/' + filename;
+                    
+                    console.log('準備分享檔案:', filePath); // 調試用
+                    
+                    // 根據您的 API，需要傳送 paths 陣列
+                    const response = await fetch(`${this.baseURL}/api/share`, {
+                        method: 'POST',
+                        headers: {
+                            'Content-Type': 'application/json',
+                        },
+                        body: JSON.stringify({
+                            paths: [filePath]  // API 要求是路徑陣列
+                        })
+                    });
+
+                    const data = await response.json();
+                    console.log('分享 API 回應:', data); // 調試用
+                    
+                    if (data.success) {
+                        // 顯示分享連結
+                        this.showShareDialog(filename, data.data);
+                        this.showMessage('success', `檔案 "${filename}" 分享成功`);
+                    } else {
+                        this.showMessage('error', `分享失敗: ${data.message}`);
+                    }
+                } catch (error) {
+                    console.error('分享錯誤:', error); // 調試用
+                    this.showMessage('error', `分享錯誤: ${error.message}`);
+                }
+            }
+
+            showShareDialog(filename, shareData) {
+                // 根據 nas_service.py 的回應格式，shareData 包含 links 陣列
+                const links = shareData.links || [];
+                const firstLink = links[0] || {};
+                
+                console.log('分享數據:', shareData); // 調試用
+                console.log('第一個連結:', firstLink); // 調試用
+                
+                // 創建分享對話框
+                const dialog = document.createElement('div');
+                dialog.className = 'share-dialog';
+                dialog.innerHTML = `
+                    <div class="share-dialog-content">
+                        <h3>📤 分享檔案: ${filename}</h3>
+                        <div class="share-info">
+                            ${links.length > 0 ? `
+                            <div class="form-group">
+                                <label>分享連結:</label>
+                                <div class="share-link-container">
+                                    <input type="text" id="shareLink" value="${firstLink.url || firstLink.link || ''}" readonly>
+                                    <button class="btn btn-small" onclick="nasManager.copyShareLink()">📋 複製</button>
+                                </div>
+                            </div>
+                            ${firstLink.id ? `
+                            <div class="form-group">
+                                <label>分享 ID:</label>
+                                <span class="share-id">${firstLink.id}</span>
+                            </div>
+                            ` : ''}
+                            ${firstLink.date_expired ? `
+                            <div class="form-group">
+                                <label>過期時間:</label>
+                                <span class="expire-time">${firstLink.date_expired || '無限期'}</span>
+                            </div>
+                            ` : ''}
+                            ${firstLink.qrcode ? `
+                            <div class="form-group">
+                                <label>QR Code:</label>
+                                <div class="qr-code">
+                                    <img src="${firstLink.qrcode}" alt="QR Code" onerror="this.style.display='none'" onload="console.log('QR Code 載入成功')">
+                                </div>
+                            </div>
+                            ` : `
+                            <div class="form-group">
+                                <span style="color: #f56500; font-size: 0.9em;">⚠️ 無 QR Code 可用</span>
+                            </div>
+                            `}
+                            ` : `
+                            <div class="form-group">
+                                <span style="color: #e53e3e;">無法獲取分享連結資訊</span>
+                            </div>
+                            `}
+                            ${shareData.has_folder ? `
+                            <div class="form-group">
+                                <span style="color: #f56500; font-size: 0.9em;">⚠️ 包含資料夾</span>
+                            </div>
+                            ` : ''}
+                        </div>
+                        <div class="share-actions">
+                            <button class="btn btn-secondary" onclick="nasManager.closeShareDialog()">關閉</button>
+                            ${links.length > 0 ? `<button class="btn btn-success" onclick="nasManager.copyShareLink()">複製連結</button>` : ''}
+                            ${firstLink.url ? `<button class="btn" style="background: linear-gradient(135deg, #9f7aea 0%, #805ad5 100%); color: white;" onclick="window.open('${firstLink.url}', '_blank')">🔗 開啟連結</button>` : ''}
+                        </div>
+                    </div>
+                    <div class="share-dialog-overlay" onclick="nasManager.closeShareDialog()"></div>
+                `;
+                
+                document.body.appendChild(dialog);
+            }
+
+            copyShareLink() {
+                const linkInput = document.getElementById('shareLink');
+                if (linkInput && linkInput.value) {
+                    linkInput.select();
+                    document.execCommand('copy');
+                    this.showMessage('success', '分享連結已複製到剪貼簿');
+                } else {
+                    this.showMessage('error', '無法複製分享連結');
+                }
+            }
+
+            closeShareDialog() {
+                const dialog = document.querySelector('.share-dialog');
+                if (dialog) {
+                    dialog.remove();
+                }
+            }
         }
 
         // 初始化應用
         const nasManager = new NASManager();
     </script>
 </body>
-</html> 
+</html>

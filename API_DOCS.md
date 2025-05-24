@@ -515,21 +515,123 @@ curl -X POST http://localhost:5000/api/upload \
 
 ---
 
-### GET /api/download
-生成檔案下載連結
+### POST /api/share
+建立檔案或資料夾的分享連結
 
-**查詢參數:**
-- `path`: 檔案路徑 (必填)
+**請求體:**
+```json
+{
+  "paths": ["/path/to/file.txt", "/path/to/folder"],
+  "password": "optional_password",
+  "date_expired": "2024-12-31",
+  "date_available": "2024-01-01",
+  "permissions": "read"
+}
+```
 
-**回應:**
+**參數說明:**
+- `paths` (必填): 字串陣列，要分享的檔案或資料夾路徑列表
+- `password` (選填): 字串，分享連結的密碼保護
+- `date_expired` (選填): 字串，分享連結的過期日期 (格式: YYYY-MM-DD)
+- `date_available` (選填): 字串，分享連結的生效日期 (格式: YYYY-MM-DD)
+- `permissions` (選填): 字串，分享權限設定
+
+**回應 (成功):**
 ```json
 {
   "success": true,
+  "message": "分享連結建立成功",
   "data": {
-    "url": "https://nas.example.com/webapi/entry.cgi?api=SYNO.FileStation.Download&...",
-    "method": "direct_with_sid"
+    "links": [
+      {
+        "id": "Au5S1mxjY",
+        "url": "https://your-nas.com:5001/sharing/Au5S1mxjY",
+        "name": "檔案名稱.pdf",
+        "path": "/home/www/nas/檔案名稱.pdf",
+        "qrcode": "data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAJMA...",
+        "date_expired": "",
+        "date_available": "",
+        "has_password": false,
+        "status": "valid",
+        "isFolder": false,
+        "link_owner": "admin",
+        "uid": 1682,
+        "app": {
+          "enable_upload": false,
+          "is_folder": false
+        }
+      }
+    ],
+    "offset": 0,
+    "total": 1
   }
 }
+```
+
+**回應欄位說明:**
+- `links`: 分享連結陣列，每個檔案/資料夾會產生一個分享連結
+- `id`: 分享連結的唯一識別碼
+- `url`: 完整的分享連結 URL
+- `qrcode`: QR Code 圖片的 base64 編碼 (data URI 格式)
+- `name`: 檔案或資料夾名稱
+- `path`: 原始檔案路徑
+- `date_expired`: 過期時間 (空字串表示無限期)
+- `has_password`: 是否設有密碼保護
+- `status`: 分享狀態 ("valid" 表示有效)
+- `isFolder`: 是否為資料夾
+
+**錯誤回應範例:**
+```json
+{
+  "success": false,
+  "message": "建立分享連結失敗: 407"
+}
+```
+
+**前端使用範例:**
+```javascript
+// 分享單一檔案
+fetch('/api/share', {
+    method: 'POST',
+    credentials: 'include',
+    headers: {
+        'Content-Type': 'application/json',
+    },
+    body: JSON.stringify({
+        paths: ['/home/www/document.pdf']
+    })
+})
+.then(response => response.json())
+.then(data => {
+    if (data.success) {
+        const link = data.data.links[0];
+        console.log('分享連結:', link.url);
+        console.log('QR Code:', link.qrcode);
+        console.log('分享 ID:', link.id);
+    }
+});
+
+// 分享多個檔案並設定密碼保護
+fetch('/api/share', {
+    method: 'POST',
+    credentials: 'include',
+    headers: {
+        'Content-Type': 'application/json',
+    },
+    body: JSON.stringify({
+        paths: ['/home/www/file1.txt', '/home/www/folder'],
+        password: 'mypassword123',
+        date_expired: '2024-12-31'
+    })
+})
+.then(response => response.json())
+.then(data => {
+    if (data.success) {
+        data.data.links.forEach(link => {
+            console.log(`${link.name}: ${link.url}`);
+        });
+    }
+});
 ```
 
 ## 系統管理端點
@@ -764,4 +866,4 @@ curl -X GET "http://localhost:5000/api/files?path=/home" \
 **常見問題排除**:
 - 如果 session 仍無效，檢查是否設定 `credentials: 'include'`
 - 跨域請求失敗，確認 Origin 在允許列表中
-- Token 認證可作為 Cookie 的替代方案 
+- Token 認證可作為 Cookie 的替代方案

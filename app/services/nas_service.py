@@ -567,6 +567,71 @@ class NASApiService:
             self.debug_log("新增資料夾錯誤", str(e))
             raise e
     
+    def create_sharing_link(self, paths_to_share, password=None, date_expired=None, date_available=None, permissions=None):
+        """建立檔案或資料夾的分享連結"""
+        if not self.sid or not self.syno_token:
+            raise Exception("請先登入")
+
+        if not paths_to_share or not isinstance(paths_to_share, list):
+            raise ValueError("paths_to_share 必須是一個包含至少一個路徑的列表")
+
+        try:
+            self.debug_log("開始建立分享連結", {
+                "paths": paths_to_share,
+                "password_protected": bool(password),
+                "date_expired": date_expired,
+                "date_available": date_available,
+                "permissions": permissions
+            })
+
+            api_params = {
+                "api": "SYNO.FileStation.Sharing",
+                "version": "3",
+                "method": "create",
+                "path": json.dumps(paths_to_share),  # API 要求是路徑列表的 JSON 字串
+                "_sid": self.sid
+            }
+            
+            # 添加可選參數
+            if password:
+                api_params["password"] = password
+            if date_expired:
+                api_params["date_expired"] = date_expired
+            if date_available:
+                api_params["date_available"] = date_available
+
+            headers = {
+                "X-SYNO-TOKEN": self.syno_token,
+            }
+
+            response = self.client.post(self.base_url, data=api_params, headers=headers)
+            response.raise_for_status()
+            
+            response_data = response.json()
+            self.debug_log("建立分享連結回應", response_data)
+
+            if not response_data.get("success"):
+                error_code = response_data.get("error", {}).get("code", "未知錯誤")
+                if "errors" in response_data.get("error", {}) and response_data["error"]["errors"]:
+                    first_error = response_data["error"]["errors"][0]
+                    error_code = first_error.get("code", error_code)
+                raise Exception(f"建立分享連結失敗: {error_code}")
+
+            # 成功時，處理回應資料
+            if "data" in response_data and "links" in response_data["data"] and response_data["data"]["links"]:
+                share_data = response_data["data"]
+                
+                # Synology API 已經提供了 QR Code (base64 格式)，不需要手動生成
+                # 直接返回原始數據
+                return share_data
+            else:
+                self.debug_log("成功回應但未找到 links 欄位", response_data)
+                raise Exception("建立分享連結成功，但回應中未找到連結資訊")
+
+        except Exception as e:
+            self.debug_log("建立分享連結錯誤", str(e))
+            raise e
+    
     def delete_files(self, file_paths, on_progress=None):
         """刪除檔案或資料夾（完整流程）"""
         try:
@@ -584,4 +649,4 @@ class NASApiService:
             }
         except Exception as e:
             self.debug_log("刪除檔案錯誤", str(e))
-            raise e 
+            raise e
