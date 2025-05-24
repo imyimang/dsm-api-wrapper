@@ -503,6 +503,70 @@ class NASApiService:
             self.debug_log("獲取後台任務列表錯誤", str(e))
             raise e
     
+    def create_folder(self, folder_path, name, force_parent=False):
+        """新增資料夾"""
+        if not self.sid or not self.syno_token:
+            raise Exception("請先登入")
+
+        try:
+            self.debug_log("開始新增資料夾", {
+                "folder_path": folder_path,
+                "name": name,
+                "force_parent": force_parent
+            })
+
+            params = {
+                "api": "SYNO.FileStation.CreateFolder",
+                "method": "create",
+                "version": "2",
+                "folder_path": json.dumps(folder_path), # API文件通常要求路徑是JSON字串
+                "name": json.dumps(name), # 資料夾名稱也可能是JSON字串
+                "force_parent": str(force_parent).lower(), # 布林值轉為字串 'true'/'false'
+                "_sid": self.sid
+            }
+
+            headers = {
+                "X-SYNO-TOKEN": self.syno_token,
+                "Content-Type": "application/x-www-form-urlencoded; charset=UTF-8" # 根據請求範例
+            }
+
+            # POST請求，參數放在data部分
+            response = self.client.post(self.base_url, data=params, headers=headers)
+            response.raise_for_status()
+
+            self.debug_log("新增資料夾回應", response.json())
+
+            if not response.json().get("success"):
+                error_code = response.json().get("error", {}).get("code", "未知錯誤")
+                # 嘗試從更深層結構獲取錯誤訊息
+                if "errors" in response.json().get("error", {}) and response.json()["error"]["errors"]:
+                    error_details = response.json()["error"]["errors"][0]
+                    if "code" in error_details:
+                         error_code = error_details["code"]
+                    elif "reason" in error_details:
+                         error_code = error_details["reason"]
+
+                # Synology API 錯誤碼參考:
+                # 400: Bad Parameter - The value of parameter is not valid.
+                # 401: Parameter is not a JSON string - The value of parameter is not a JSON string.
+                # 403: The logged in session does not have permission.
+                # 404: The path is not found.
+                # 406: The folder or file name is empty or includes invalid characters.
+                # 407: A file or folder of the same name already exists in the destination folder.
+                # 408: The logged in user session is not validated.
+                # 409: The volume status is abnormal.
+                # 412: The parent folder is not specified or is invalid.
+                # 413: The folder path is too long.
+                # 416: Failed to create a folder. The error is undefined.
+                # 417: The number of folders in the parent folder has reached the system's maximum limit.
+                # 418: Failed to create a folder. The error is undefined.
+                raise Exception(f"新增資料夾失敗: {error_code}")
+
+            return response.json() # 通常成功時，data欄位可能不直接包含資料夾資訊，而是成功訊息
+        except Exception as e:
+            self.debug_log("新增資料夾錯誤", str(e))
+            raise e
+    
     def delete_files(self, file_paths, on_progress=None):
         """刪除檔案或資料夾（完整流程）"""
         try:

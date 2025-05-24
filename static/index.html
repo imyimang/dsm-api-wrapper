@@ -388,8 +388,12 @@
                     當前路徑: <span id="currentPath">/home/www</span>
                 </div>
                 <div>
-                    <input type="text" id="pathInput" placeholder="輸入路徑，例如: /home/documents" style="width: 70%; display: inline-block;">
+                    <input type="text" id="pathInput" placeholder="輸入路徑，例如: /home/documents" style="width: 70%; display: inline-block; margin-bottom: 10px;">
                     <button id="goPathBtn" class="btn btn-small" style="width: 25%; margin-left: 5%;">📂 前往</button>
+                </div>
+                <div style="margin-top: 10px; margin-bottom: 20px; display: flex; gap: 10px;">
+                    <input type="text" id="newFolderName" placeholder="新資料夾名稱" style="flex-grow: 1;">
+                    <button id="createFolderBtn" class="btn btn-small btn-success">➕ 建立資料夾</button>
                 </div>
                 <div class="file-list" id="fileList">
                     <div style="text-align: center; color: #718096;">
@@ -520,6 +524,11 @@
                 // 重新整理任務
                 document.getElementById('refreshTasksBtn').addEventListener('click', () => {
                     this.loadTasks();
+                });
+
+                // 新增：建立資料夾按鈕
+                document.getElementById('createFolderBtn').addEventListener('click', () => {
+                    this.createFolder();
                 });
             }
 
@@ -979,12 +988,77 @@
                 const textElement = document.getElementById(`${action}Text`);
                 const loadingElement = document.getElementById(`${action}Loading`);
                 
-                if (loading) {
-                    textElement.classList.add('hidden');
-                    loadingElement.classList.remove('hidden');
-                } else {
-                    textElement.classList.remove('hidden');
-                    loadingElement.classList.add('hidden');
+                // 針對 createFolderBtn 可能沒有 loginText, loginLoading 這樣的元素
+                // 需要通用化或為 createFolderBtn 增加特定處理
+                if (action === 'createFolder') { // 簡易處理，實際應用可能需要更完善的 UI 反饋
+                    const btn = document.getElementById('createFolderBtn');
+                    if (btn) {
+                        btn.disabled = loading;
+                        btn.innerHTML = loading ? '<span class="loading"></span> 建立中...' : '➕ 建立資料夾';
+                    }
+                    return;
+                }
+
+                if (textElement && loadingElement) {
+                    if (loading) {
+                        textElement.classList.add('hidden');
+                        loadingElement.classList.remove('hidden');
+                    } else {
+                        textElement.classList.remove('hidden');
+                        loadingElement.classList.add('hidden');
+                    }
+                }
+            }
+
+            async createFolder() {
+                const folderName = document.getElementById('newFolderName').value.trim();
+                if (!folderName) {
+                    this.showMessage('error', '請輸入資料夾名稱');
+                    return;
+                }
+                // 新增：驗證資料夾名稱是否包含斜線
+                if (folderName.includes('/') || folderName.includes('\\')) {
+                    this.showMessage('error', '資料夾名稱不能包含斜線 (/) 或反斜線 (\\)');
+                    return;
+                }
+
+                if (!this.isLoggedIn) {
+                    this.showMessage('error', '請先登入');
+                    return;
+                }
+
+                this.setLoading('createFolder', true); // 假設有對應的 loading 狀態處理
+
+                try {
+                    const response = await fetch(`${this.baseURL}/api/folder`, {
+                        method: 'POST',
+                        headers: {
+                            'Content-Type': 'application/json',
+                            // 注意：如果後端 get_nas_session 依賴 Authorization Bearer token,
+                            // 則需要像其他請求一樣傳遞它。
+                            // 目前 file_routes.py 中的 get_nas_session 支援 cookie 和 token
+                        },
+                        body: JSON.stringify({
+                            parent_path: this.currentPath,
+                            folder_name: folderName,
+                            force_parent: false // 或 true，根據需求
+                        })
+                    });
+
+                    const data = await response.json();
+
+                    if (data.success) {
+                        this.showMessage('success', `資料夾 "${folderName}" 建立成功`);
+                        document.getElementById('newFolderName').value = ''; // 清空輸入框
+                        this.loadFiles(); // 重新載入檔案列表
+                    } else {
+                        this.showMessage('error', `建立資料夾失敗: ${data.message || '未知錯誤'}`);
+                    }
+                } catch (error) {
+                    this.showMessage('error', `建立資料夾時發生錯誤: ${error.message}`);
+                } finally {
+                    this.setLoading('createFolder', false); // 假設有對應的 loading 狀態處理
+                    // 如果沒有專門的 createFolder loading, 可以移除這兩行 setLoading
                 }
             }
         }

@@ -191,3 +191,34 @@ def api_delete_status(taskid):
             "success": False,
             "message": f"查詢刪除狀態失敗：{str(e)}"
         }), 400 
+
+@file_bp.route('/folder', methods=['POST'])
+def api_create_folder():
+    """建立資料夾"""
+    try:
+        service = get_nas_session()
+        if not service:
+            return jsonify({"success": False, "message": "未登入"}), 401
+        data = request.get_json()
+        parent_path = data.get('parent_path')
+        folder_name = data.get('folder_name')
+        force_parent = data.get('force_parent', False)
+
+        if not parent_path or not folder_name:
+            return jsonify({"success": False, "message": "缺少必要參數 parent_path 或 folder_name"}), 400
+        
+        # 新增：後端驗證 folder_name
+        if '/' in folder_name or '\\' in folder_name:
+            return jsonify({"success": False, "message": "資料夾名稱不能包含斜線 (/) 或反斜線 (\\)"}), 400
+
+        result = service.create_folder(parent_path, folder_name, force_parent)
+        return jsonify({
+            "success": True,
+            "message": "建立資料夾成功",
+            "data": result
+        })
+    except Exception as e:
+        return jsonify({
+            "success": False,
+            "message": f"建立資料夾失敗：{str(e)}"
+        }), 400

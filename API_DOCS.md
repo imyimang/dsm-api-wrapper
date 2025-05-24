@@ -365,6 +365,51 @@ GET /api/files?path=/home/documents
 
 ---
 
+### POST /api/folder
+建立新的資料夾
+
+**請求體:**
+```json
+{
+  "parent_path": "/home/www",
+  "folder_name": "MyNewFolder",
+  "force_parent": false 
+}
+```
+- `parent_path` (必填): 字串，新資料夾的父路徑。
+- `folder_name` (必填): 字串，新資料夾的名稱 (不應包含路徑分隔符 `/` 或 `\`)。
+- `force_parent` (選填): 布林值，如果父路徑不存在時是否自動建立。預設為 `false`。
+
+**回應 (成功):**
+```json
+{
+  "success": true,
+  "message": "建立資料夾成功",
+  "data": {
+    // 根據 NAS API 的實際回應，這裡可能包含新資料夾的資訊或僅是成功狀態
+    // 例如: "folder_path": "/home/www/MyNewFolder"
+  }
+}
+```
+
+**回應 (失敗 - 例如名稱無效):**
+```json
+{
+  "success": false,
+  "message": "建立資料夾失敗：資料夾名稱不能包含斜線 (/) 或反斜線 (\\)"
+}
+```
+
+**回應 (失敗 - 例如 NAS API 錯誤):**
+```json
+{
+  "success": false,
+  "message": "建立資料夾失敗：新增資料夾失敗: 407" // 407 表示同名資料夾已存在
+}
+```
+
+---
+
 ### POST /api/upload
 上傳檔案到指定路徑
 

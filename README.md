@@ -124,6 +124,7 @@ dsm-api-wrapper/
 - `POST /api/upload` - 上傳檔案
 - `DELETE /api/delete` - 刪除檔案/資料夾
 - `GET /api/delete/status/<taskid>` - 查詢刪除任務狀態
+- `POST /api/folder` - 建立新資料夾
 
 ### 檔案操作
 - `POST /api/compress` - 壓縮檔案/資料夾

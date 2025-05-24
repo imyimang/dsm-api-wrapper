@@ -127,7 +127,7 @@ def create_app(config_class=Config):
         api_docs = {
             "title": "Synology NAS Flask API Server",
             "description": "完整重構自 nasApi.js 的 Python Flask API",
-            "version": "1.0.0",
+            "version": "1.3.0",
             "web_app": {
                 "url": "/app",
                 "description": "網頁版 NAS 管理介面"
@@ -141,6 +141,7 @@ def create_app(config_class=Config):
                 "File Management": {
                     "GET /api/files": "列出檔案和資料夾",
                     "POST /api/upload": "上傳檔案",
+                    "POST /api/folder": "建立新的資料夾",
                     "DELETE /api/delete": "刪除檔案/資料夾",
                     "GET /api/delete/status/<taskid>": "查詢刪除任務狀態"
                 },

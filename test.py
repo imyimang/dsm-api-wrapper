@@ -200,6 +200,62 @@ class NASApiTester:
             print(f"❌ 登出測試錯誤: {e}")
             return False
     
+    def test_create_folder(self, parent_path=None, folder_name=None):
+        """測試建立資料夾功能"""
+        print("🧪 測試建立資料夾功能...")
+        
+        # 檢查是否登入 (隱含地，如果 session 無效，後端 API 會拒絕)
+        # 為了更明確，可以先調用 self.test_session_check() 或確保在登入後執行此測試
+
+        if not parent_path:
+            parent_path = input(f"請輸入父路徑 (預設: /home/www): ") or "/home/www"
+        if not folder_name:
+            folder_name = input(f"請輸入新資料夾名稱 (例如: test_folder_{int(time.time())}): ")
+            if not folder_name:
+                print("❌ 未輸入資料夾名稱，測試中止")
+                return False
+        
+        print(f"   嘗試在 '{parent_path}' 下建立資料夾 '{folder_name}'")
+
+        try:
+            create_folder_data = {
+                "parent_path": parent_path,
+                "folder_name": folder_name,
+                "force_parent": False
+            }
+            
+            response = self.session.post(
+                f"{self.base_url}/api/folder",
+                json=create_folder_data,
+                headers={"Content-Type": "application/json"}
+            )
+            
+            if response.status_code == 200:
+                data = response.json()
+                if data.get("success"):
+                    print(f"✅ 建立資料夾成功: {data.get('message')}")
+                    # 如果 API 回應中有新資料夾的詳細資訊，可以在這裡印出
+                    # print(f"   詳細資料: {data.get('data')}")
+                    return True
+                else:
+                    print(f"❌ 建立資料夾失敗: {data.get('message')}")
+                    return False
+            elif response.status_code == 401: # 未登入的情況
+                print(f"❌ 建立資料夾失敗: 未登入或 Session 無效 (狀態碼: {response.status_code})")
+                print(f"   請先執行登入測試。")
+                return False
+            else:
+                print(f"❌ 建立資料夾請求失敗: {response.status_code}")
+                try:
+                    error_data = response.json()
+                    print(f"   錯誤訊息: {error_data.get('message')}")
+                except json.JSONDecodeError:
+                    print("   無法解析錯誤回應")
+                return False
+        except Exception as e:
+            print(f"❌ 建立資料夾測試錯誤: {e}")
+            return False
+    
     def run_all_tests(self):
         """執行所有測試"""
         print("🎯 開始執行 NAS API 測試套件")
@@ -217,6 +273,10 @@ class NASApiTester:
         if results[-1][1]:  # 如果登入成功
             results.append(("Session檢查", self.test_session_check()))
             results.append(("檔案列表", self.test_list_files()))
+            # 新增測試案例到 run_all_tests
+            # 為了避免自動測試時產生過多垃圾資料夾，可以考慮預設路徑和隨機名稱
+            default_test_folder_name = f"autotest_folder_{int(time.time()) % 1000}"
+            results.append(("建立資料夾", self.test_create_folder(parent_path="/home/www", folder_name=default_test_folder_name)))
             results.append(("後台任務", self.test_background_tasks()))
             results.append(("Debug切換", self.test_debug_toggle()))
             results.append(("登出功能", self.test_logout()))
@@ -286,6 +346,7 @@ def main():
         print("5. 後台任務")
         print("6. Debug切換")
         print("7. 登出功能")
+        print("8. 建立資料夾")
         
         test_choice = input("請選擇測試編號: ").strip()
         
@@ -296,7 +357,8 @@ def main():
             "4": tester.test_list_files,
             "5": tester.test_background_tasks,
             "6": tester.test_debug_toggle,
-            "7": tester.test_logout
+            "7": tester.test_logout,
+            "8": tester.test_create_folder
         }
         
         if test_choice in test_methods:
