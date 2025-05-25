@@ -16,7 +16,7 @@
 - 檔案下載
 - 檔案/資料夾刪除
 - 建立新資料夾
-- 檔案壓縮
+- ~~檔案壓縮~~
 
 ### 分享功能
 - 建立分享連結
@@ -36,9 +36,10 @@
 
 ```
 SimpleNAS/
-├── server.py           # Flask 應用程式主體與工具類別
-├── router.py           # API 路由定義
+├── server.py          # Flask 應用程式主體與工具類別
+├── router.py          # API 路由定義
 ├── run.py             # 啟動腳本
+├── test.py            # 測試腳本(需先開啟伺服器)
 ├── index.html         # 前端網頁應用程式
 ├── session.json       # Session 持久化儲存檔案
 ├── README.md          # 專案說明文件
@@ -77,7 +78,7 @@ SimpleNAS/
 
 ### 安裝依賴
 ```bash
-pip install flask requests
+pip install -r requirements.txt
 ```
 
 ### 啟動服務
@@ -153,44 +154,6 @@ CMD ["python", "run.py"]
 #### 多用戶衝突
 - **原因**：Session 管理錯誤
 - **解決**：清除瀏覽器 cookies，檢查 Flask secret_key
-
-## 安全性考量
-
-### 當前實現
-- ✅ 使用 Synology 官方 API
-- ✅ CSRF Token 驗證
-- ✅ 多用戶 Session 隔離
-- ✅ 自動 Session 過期
-- ✅ Session 持久化儲存
-
-### 建議改進
-- Session 加密儲存
-- HTTPS 強制連線
-- 密碼加密儲存
-- IP 白名單機制
-- 操作日誌記錄
-
-## 開發狀態
-
-### 已完成功能
-- ✅ 基本檔案管理
-- ✅ 檔案分享與 QR Code
-- ✅ 響應式網頁介面
-- ✅ 拖放上傳
-- ✅ 檔案壓縮
-- ✅ 多用戶支援
-- ✅ Session 持久化儲存
-- ✅ 自動過期機制
-
-### 計劃功能
-- Session 加密儲存
-- 檔案預覽
-- 批次操作
-- 進度顯示
-- 檔案搜尋
-- 使用者權限管理
-- 操作日誌記錄
-- 系統監控面板
 
 ## Session 管理說明
 
