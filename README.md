@@ -1,167 +1,237 @@
-# Synology DSM API Wrapper
+# SimpleNAS - Synology NAS 管理系統
 
-本專案是一個 Python Flask 實現的 Synology DSM (DiskStation Manager) API 包裝器，提供簡化的 RESTful API 介面來管理 Synology NAS 系統，隱藏了原始 API 的複雜性。
+一個基於 Flask 的 Synology NAS 檔案管理系統，提供完整的網頁介面和 REST API。
 
-## 功能
+## 主要功能
 
 ### 身份驗證
-- DSM 系統登入/登出
-- Session 管理和驗證
-- 自動 SSL 證書處理
+- Synology DSM 帳號登入
+- Session 管理（檔案儲存，支援多用戶）
+- 自動登入狀態檢查
+- Session 過期機制（預設一年）
 
 ### 檔案管理
-- 瀏覽目錄和檔案列表
-- 檔案上傳
+- 目錄瀏覽與導航
+- 檔案上傳（支援拖放、多檔案）
+- 檔案下載
 - 檔案/資料夾刪除
-- 任務狀態監控
-- 創建資料夾
+- 建立新資料夾
+- 檔案壓縮
 
-### 檔案操作
-- 檔案壓縮 (ZIP/7Z)
-- 下載連結生成
-- **檔案分享連結生成** (含 QR Code)
-- 完整的錯誤處理
+### 分享功能
+- 建立分享連結
+- 密碼保護
+- 過期時間設定
+- QR Code 生成（base64 格式）
+- 一鍵複製分享連結
 
-### 系統管理
-- 後台任務列表
-- Debug 模式切換
+### 使用者介面
+- 響應式設計（支援手機、平板）
+- 現代化 UI 設計
+- 麵包屑導航
+- 即時操作回饋
+- 拖放上傳
 
-### 網頁介面
-- 完整的網頁 NAS 管理介面
-- 響應式設計，支援各種設備
-- 無需額外依賴，純前端實現
+## 系統架構
 
-## 安裝
-
-### 1. 安裝依賴項
-
-```bash
-pip install -r requirements.txt
+```
+SimpleNAS/
+├── server.py           # Flask 應用程式主體與工具類別
+├── router.py           # API 路由定義
+├── run.py             # 啟動腳本
+├── index.html         # 前端網頁應用程式
+├── session.json       # Session 持久化儲存檔案
+├── README.md          # 專案說明文件
+└── API.md             # API 接口說明文件
 ```
 
-### 2. 啟動伺服器
+## 技術特色
 
+### 多用戶 Session 管理
+- **檔案儲存**：Session 資料持久化到 `session.json`
+- **多用戶支援**：同時支援多個用戶登入不同帳號
+- **自動過期**：預設一年後自動過期
+- **活動追蹤**：記錄最後活動時間
+- **自動清理**：啟動時自動清理過期 sessions
+- **服務器重啟存活**：服務器重啟後 session 仍然有效
+
+### 安全機制
+- 使用 Synology 官方 API
+- CSRF Token 驗證
+- Session ID 驗證
+- 多用戶 Session 隔離
+- 自動 Session 過期機制
+
+### 檔案下載優化
+- 使用 Synology fbdownload 端點
+- 十六進制路徑編碼
+- 防止快取機制
+- 用戶專屬 Session 驗證
+
+## 快速開始
+
+### 環境需求
+- Python 3.7+
+- Flask
+- requests
+
+### 安裝依賴
+```bash
+pip install flask requests
+```
+
+### 啟動服務
 ```bash
 python run.py
 ```
 
-伺服器將在 `http://localhost:5000` 啟動。
+### 訪問應用
+- **網頁介面**：http://127.0.0.1:5000/app
+- **API 總覽**：http://127.0.0.1:5000/
+- **API 文件**：[API.md](API.md)
 
-### 3. 測試 API
+## 系統配置
 
+### 預設設定
+```python
+class Config:
+    NAS_BASE_URL = "https://your-nas.example.com:5001/webapi/entry.cgi"
+    NAS_TIMEOUT = 30
+    SESSION_FILE = "session.json"
+    SESSION_EXPIRE_DAYS = 365
+```
+
+### 環境變數
 ```bash
-python test.py
+# NAS 設定
+export NAS_BASE_URL="https://your-nas.example.com:5001/webapi/entry.cgi"
+export NAS_TIMEOUT=30
+
+# 服務器設定
+export FLASK_HOST="0.0.0.0"
+export FLASK_PORT=5000
+export FLASK_DEBUG=True
+
+# Session 設定
+export SESSION_FILE="session.json"
+export SESSION_EXPIRE_DAYS=365
 ```
 
-## Demo 網站
-**提醒: Demo網站還在測試階段，並沒有包含所有支援的API功能**
+## 部署方式
 
-本專案包含完整的網頁管理介面，提供友善的使用者體驗：
-
-### 訪問方式
-- **URL**: `http://localhost:5000/app`
-- **功能**: 完整的 NAS 檔案管理界面
-- **特色**: 響應式設計，支援手機和桌面設備
-
-### 主要功能
-- 登入/登出 NAS 系統
-- 瀏覽檔案和資料夾
-- 上傳檔案 (支援拖放)
-- 下載檔案
-- **分享檔案 (含 QR Code)**
-- 刪除檔案/資料夾
-- 創建資料夾
-- ~~壓縮檔案~~
-- 即時任務狀態監控
-
-### 部署選項
-1. **透過 Flask 應用** (推薦)：直接訪問 `/app` 路由
-2. **獨立部署**：使用任何網頁伺服器提供 `static/` 目錄
-3. **反向代理**：使用 nginx 等代理伺服器
-
-詳細部署說明請參閱 [static/README.md](static/README.md)。
-
-
-## 專案結構
-
-```
-dsm-api-wrapper/
-├── app/                     # 模組化版本主目錄
-│   ├── __init__.py          # 應用程式工廠
-│   ├── config.py            # 配置設定
-│   ├── services/            # 服務層
-│   │   ├── __init__.py
-│   │   └── nas_service.py   # NAS API 服務類別
-│   ├── routes/              # 路由層
-│   │   ├── __init__.py
-│   │   ├── auth_routes.py   # 身份驗證路由
-│   │   ├── file_routes.py   # 檔案管理路由
-│   │   └── system_routes.py # 系統管理路由
-│   └── utils/               # 工具函數
-│       ├── __init__.py
-│       └── helpers.py       # 輔助函數
-├── static/                  # 網頁應用靜態文件
-│   ├── index.html           # 網頁 NAS 管理介面
-│   └── README.md            # 靜態文件部署說明
-├── run.py                   # 應用程式啟動文件
-├── test.py                  # 測試套件
-├── test_tasks.py            # 任務測試
-├── requirements.txt         # Python 依賴項
-├── README.md                # 本專案說明
-├── API_DOCS.md              # 詳細 API 文檔
-├── LICENSE                  # 授權條款
-├── Dockerfile               # Docker 配置
-└── .gitignore               # Git 忽略設定
-```
-
-## API 概覽
-
-本專案提供以下主要 API 端點：
-
-### 身份驗證
-- `POST /api/login` - 登入 NAS 系統
-- `POST /api/logout` - 登出系統
-- `GET /api/session/check` - 檢查 Session 狀態
-
-### 檔案管理
-- `GET /api/files` - 獲取檔案列表
-- `POST /api/upload` - 上傳檔案
-- `DELETE /api/delete` - 刪除檔案/資料夾
-- `GET /api/delete/status/<taskid>` - 查詢刪除任務狀態
-- `POST /api/folder` - 建立新資料夾
-
-### 檔案操作
-- `POST /api/compress` - 壓縮檔案/資料夾
-- `GET /api/download` - 生成下載連結
-- `POST /api/share` - 建立分享連結 (含 QR Code)
-
-### 系統管理
-- `GET /api/tasks` - 獲取後台任務列表
-- `POST /api/debug/toggle` - 切換 Debug 模式
-
-### 網頁應用
-- `GET /app` - 訪問網頁 NAS 管理介面
-- `GET /static/<filename>` - 靜態資源文件
-
-> 📖 **詳細 API 文檔**: 請參閱 [API_DOCS.md](API_DOCS.md) 獲取完整的 API 使用說明、請求/回應範例、錯誤代碼等詳細資訊。
-
-## 測試
-### 自動測試
+### 標準部署
 ```bash
-python test.py
+git clone https://github.com/your-repo/simpleNAS.git
+cd simpleNAS
+pip install flask requests
+python run.py
 ```
 
-### 手動測試
-1. 啟動伺服器: `python run.py`
-2. 訪問 API 文檔: `http://localhost:5000/`
-3. 訪問網頁介面: `http://localhost:5000/app`
-4. 使用任何 HTTP 客戶端測試端點
+### Docker 部署
+```dockerfile
+FROM python:3.9-slim
+WORKDIR /app
+COPY . .
+RUN pip install flask requests
+EXPOSE 5000
+VOLUME ["/app/session.json"]
+CMD ["python", "run.py"]
+```
 
-## 文檔
-- **[API 詳細文檔](API_DOCS.md)** - 完整的 API 端點說明
+## 故障排除
 
-## 參考資料
+### 常見問題
 
-- [Synology API 官方文檔](https://global.download.synology.com/download/Document/Software/DeveloperGuide/Package/FileStation/All/enu/Synology_File_Station_API_Guide.pdf)
+#### Session Hash Invalid
+- **原因**：Session 過期或無效
+- **解決**：重新登入或檢查 session.json 檔案
 
+#### 下載失敗
+- **原因**：Session 過期或路徑編碼問題
+- **解決**：檢查登入狀態，確認檔案路徑正確
 
+#### 多用戶衝突
+- **原因**：Session 管理錯誤
+- **解決**：清除瀏覽器 cookies，檢查 Flask secret_key
+
+## 安全性考量
+
+### 當前實現
+- ✅ 使用 Synology 官方 API
+- ✅ CSRF Token 驗證
+- ✅ 多用戶 Session 隔離
+- ✅ 自動 Session 過期
+- ✅ Session 持久化儲存
+
+### 建議改進
+- Session 加密儲存
+- HTTPS 強制連線
+- 密碼加密儲存
+- IP 白名單機制
+- 操作日誌記錄
+
+## 開發狀態
+
+### 已完成功能
+- ✅ 基本檔案管理
+- ✅ 檔案分享與 QR Code
+- ✅ 響應式網頁介面
+- ✅ 拖放上傳
+- ✅ 檔案壓縮
+- ✅ 多用戶支援
+- ✅ Session 持久化儲存
+- ✅ 自動過期機制
+
+### 計劃功能
+- Session 加密儲存
+- 檔案預覽
+- 批次操作
+- 進度顯示
+- 檔案搜尋
+- 使用者權限管理
+- 操作日誌記錄
+- 系統監控面板
+
+## Session 管理說明
+
+### 檔案結構
+```json
+{
+  "session_id": {
+    "sid": "Synology Session ID",
+    "syno_token": "CSRF Token",
+    "login_time": 1748181602.859816,
+    "last_activity": 1748181729.356549,
+    "expires_at": 1779717602.859816,
+    "credentials": {
+      "account": "username",
+      "password": "password"
+    },
+    "session_id": "session_id"
+  }
+}
+```
+
+### 管理功能
+- 自動載入和儲存
+- 過期 session 清理
+- 多用戶並發支援
+- 活動時間更新
+
+## 授權條款
+
+MIT License - 詳見 LICENSE 檔案
+
+## 貢獻指南
+
+歡迎提交 Issue 和 Pull Request！
+
+1. Fork 專案
+2. 建立功能分支
+3. 提交變更
+4. 推送到分支
+5. 建立 Pull Request
+
+---
+
+**注意**：本專案僅供學習和內部使用，請確保符合您的安全需求後再部署到生產環境。

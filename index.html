@@ -79,8 +79,7 @@
 
         input[type="text"],
         input[type="password"],
-        input[type="file"],
-        select {
+        input[type="file"] {
             width: 100%;
             padding: 12px;
             border: 2px solid #e2e8f0;
@@ -90,8 +89,7 @@
         }
 
         input[type="text"]:focus,
-        input[type="password"]:focus,
-        select:focus {
+        input[type="password"]:focus {
             outline: none;
             border-color: #667eea;
         }
@@ -125,6 +123,11 @@
 
         .btn-secondary {
             background: linear-gradient(135deg, #a0aec0 0%, #718096 100%);
+        }
+
+        .btn-small {
+            padding: 6px 12px;
+            font-size: 14px;
         }
 
         .tabs {
@@ -203,11 +206,6 @@
         .file-actions {
             display: flex;
             gap: 5px;
-        }
-
-        .btn-small {
-            padding: 6px 12px;
-            font-size: 14px;
         }
 
         .current-path {
@@ -301,92 +299,6 @@
             color: #a0aec0;
         }
 
-        /* 新增：分享對話框樣式 */
-        .share-dialog {
-            position: fixed;
-            top: 0;
-            left: 0;
-            width: 100%;
-            height: 100%;
-            z-index: 1000;
-            display: flex;
-            align-items: center;
-            justify-content: center;
-        }
-
-        .share-dialog-overlay {
-            position: absolute;
-            top: 0;
-            left: 0;
-            width: 100%;
-            height: 100%;
-            background: rgba(0, 0, 0, 0.5);
-            backdrop-filter: blur(5px);
-        }
-
-        .share-dialog-content {
-            position: relative;
-            background: white;
-            border-radius: 15px;
-            padding: 30px;
-            max-width: 500px;
-            width: 90%;
-            box-shadow: 0 10px 30px rgba(0, 0, 0, 0.3);
-            z-index: 1001;
-        }
-
-        .share-dialog-content h3 {
-            margin-bottom: 20px;
-            color: #4a5568;
-            text-align: center;
-        }
-
-        .share-info {
-            margin-bottom: 20px;
-        }
-
-        .share-link-container {
-            display: flex;
-            gap: 10px;
-            align-items: center;
-        }
-
-        .share-link-container input {
-            flex: 1;
-            padding: 10px;
-            border: 1px solid #e2e8f0;
-            border-radius: 8px;
-            background: #f7fafc;
-        }
-
-        .share-id, .expire-time {
-            color: #4a5568;
-            font-family: monospace;
-            background: #f7fafc;
-            padding: 5px 10px;
-            border-radius: 5px;
-            display: inline-block;
-        }
-
-        .qr-code {
-            text-align: center;
-            padding: 10px;
-            background: #f7fafc;
-            border-radius: 5px;
-        }
-
-        .qr-code img {
-            border: 1px solid #e2e8f0;
-            border-radius: 5px;
-            max-width: 150px;
-        }
-
-        .share-actions {
-            display: flex;
-            gap: 10px;
-            justify-content: flex-end;
-        }
-
         @media (max-width: 768px) {
             .container {
                 padding: 10px;
@@ -411,20 +323,6 @@
                 margin-top: 10px;
                 width: 100%;
                 justify-content: flex-end;
-            }
-
-            .share-dialog-content {
-                width: 95%;
-                padding: 20px;
-            }
-            
-            .share-link-container {
-                flex-direction: column;
-                align-items: stretch;
-            }
-            
-            .share-actions {
-                flex-direction: column;
             }
         }
     </style>
@@ -465,7 +363,6 @@
                     </div>
                     <div>
                         <button id="refreshBtn" class="btn btn-secondary btn-small">🔄 重新整理</button>
-                        <button id="debugBtn" class="btn btn-secondary btn-small">🐛 Debug</button>
                         <button id="logoutBtn" class="btn btn-danger btn-small">🚪 登出</button>
                     </div>
                 </div>
@@ -475,7 +372,6 @@
             <div class="tabs">
                 <div class="tab active" data-tab="files">📁 檔案管理</div>
                 <div class="tab" data-tab="upload">📤 檔案上傳</div>
-                <div class="tab" data-tab="tasks">⚙️ 系統任務</div>
             </div>
 
             <!-- 訊息顯示區域 -->
@@ -497,7 +393,7 @@
                 </div>
                 <div class="file-list" id="fileList">
                     <div style="text-align: center; color: #718096;">
-                        請先選擇路徑或點擊重新整理來載入檔案列表
+                        請先登入後點擊重新整理來載入檔案列表
                     </div>
                 </div>
             </div>
@@ -527,19 +423,6 @@
                     <div id="uploadStatus"></div>
                 </div>
             </div>
-
-            <!-- 系統任務頁籤 -->
-            <div id="tasksTab" class="tab-content">
-                <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 20px;">
-                    <h3>🔧 系統後台任務</h3>
-                    <button id="refreshTasksBtn" class="btn btn-small">🔄 重新整理</button>
-                </div>
-                <div id="tasksList">
-                    <div style="text-align: center; color: #718096;">
-                        點擊重新整理來載入任務列表
-                    </div>
-                </div>
-            </div>
         </div>
     </div>
 
@@ -549,18 +432,12 @@
                 this.baseURL = window.location.origin;
                 this.currentPath = '/home/www';
                 this.isLoggedIn = false;
-                this.storedCredentials = null;  // 儲存登入憑證
-                this.autoRetryCount = 0;  // 防止無限重試
-                this.sessionInfo = {  // 🔥 添加 session 信息
-                    sid: null,
-                    token: null
-                };
                 this.init();
             }
 
             init() {
                 this.setupEventListeners();
-                this.checkSession();
+                this.checkStatus();
             }
 
             setupEventListeners() {
@@ -578,11 +455,6 @@
                 // 重新整理按鈕
                 document.getElementById('refreshBtn').addEventListener('click', () => {
                     this.loadFiles();
-                });
-
-                // Debug 按鈕
-                document.getElementById('debugBtn').addEventListener('click', () => {
-                    this.toggleDebug();
                 });
 
                 // 頁籤切換
@@ -627,39 +499,27 @@
                     this.uploadFiles(e.dataTransfer.files);
                 });
 
-                // 重新整理任務
-                document.getElementById('refreshTasksBtn').addEventListener('click', () => {
-                    this.loadTasks();
-                });
-
-                // 新增：建立資料夾按鈕
+                // 建立資料夾按鈕
                 document.getElementById('createFolderBtn').addEventListener('click', () => {
                     this.createFolder();
                 });
             }
 
-            async checkSession() {
+            async checkStatus() {
                 try {
-                    const response = await fetch(`${this.baseURL}/api/session/check`, {
-                        method: 'GET',
-                        credentials: 'include',  // 🔥 確保發送 cookies
-                        headers: {
-                            'Cache-Control': 'no-cache',
-                            'X-Requested-With': 'XMLHttpRequest'
-                        }
-                    });
+                    const response = await fetch(`${this.baseURL}/api/status`);
                     const data = await response.json();
                     
-                    if (data.success) {
+                    if (data.success && data.logged_in) {
                         this.isLoggedIn = true;
                         this.showMainContent();
-                        this.updateSessionInfo(data.data);
+                        this.updateSessionInfo(data);
                         this.loadFiles();
                     } else {
                         this.showLoginSection();
                     }
                 } catch (error) {
-                    console.error('檢查 session 錯誤:', error);
+                    console.error('檢查狀態錯誤:', error);
                     this.showLoginSection();
                 }
             }
@@ -673,7 +533,6 @@
                 try {
                     const response = await fetch(`${this.baseURL}/api/login`, {
                         method: 'POST',
-                        credentials: 'include',  // 🔥 確保 Cookie 被發送
                         headers: {
                             'Content-Type': 'application/json',
                         },
@@ -687,70 +546,16 @@
                     
                     if (data.success) {
                         this.isLoggedIn = true;
-                        this.storedCredentials = {
-                            username: username,
-                            password: password
-                        };
-                        this.autoRetryCount = 0;
-                        
-                        // 🔥 清空 session 信息，等待重新加載
-                        this.sessionInfo = {
-                            sid: null,
-                            token: null
-                        };
-                        
                         this.showMessage('success', `登入成功！歡迎 ${username}`);
                         this.showMainContent();
-                        
-                        // 增加更長的延遲，讓 Session 穩定
-                        setTimeout(() => {
-                            this.loadFiles();
-                        }, 3000);
+                        this.loadFiles();
                     } else {
-                        this.showMessage('error', `登入失敗: ${data.message}`, 'loginMessage');
+                        this.showMessage('error', `登入失敗: ${data.error}`, 'loginMessage');
                     }
                 } catch (error) {
                     this.showMessage('error', `連線錯誤: ${error.message}`, 'loginMessage');
                 } finally {
                     this.setLoading('login', false);
-                }
-            }
-
-            async autoRelogin() {
-                if (!this.storedCredentials || this.autoRetryCount >= 3) {
-                    console.log('無法自動重登：', !this.storedCredentials ? '無憑證' : '重試次數已達上限');
-                    return false;
-                }
-                
-                this.autoRetryCount++;
-                console.log(`嘗試自動重登 (第 ${this.autoRetryCount} 次)`);
-                
-                try {
-                    const response = await fetch(`${this.baseURL}/api/login`, {
-                        method: 'POST',
-                        credentials: 'include',
-                        headers: {
-                            'Content-Type': 'application/json',
-                        },
-                        body: JSON.stringify({
-                            account: this.storedCredentials.username,
-                            password: this.storedCredentials.password
-                        })
-                    });
-                    
-                    const data = await response.json();
-                    
-                    if (data.success) {
-                        console.log('自動重登成功');
-                        this.isLoggedIn = true;
-                        return true;
-                    } else {
-                        console.log('自動重登失敗:', data.message);
-                        return false;
-                    }
-                } catch (error) {
-                    console.error('自動重登錯誤:', error);
-                    return false;
                 }
             }
 
@@ -762,9 +567,6 @@
                     this.showMessage('info', '已成功登出');
                 } catch (error) {
                     console.error('登出錯誤:', error);
-                } finally {
-                    this.storedCredentials = null;  // 🔥 清除儲存的憑證
-                    this.autoRetryCount = 0;
                 }
             }
 
@@ -774,71 +576,22 @@
                 const fileList = document.getElementById('fileList');
                 fileList.innerHTML = '<div style="text-align: center;"><span class="loading"></span> 載入中...</div>';
                 
-                // 🔥 支援自動重試
-                for (let attempt = 0; attempt < 2; attempt++) {
-                    try {
-                        // 🔥 添加 sid 和 token 參數
-                        let url = `${this.baseURL}/api/files?path=${encodeURIComponent(this.currentPath)}`;
-                        if (this.sessionInfo.sid && this.sessionInfo.token) {
-                            url += `&sid=${encodeURIComponent(this.sessionInfo.sid)}&token=${encodeURIComponent(this.sessionInfo.token)}`;
-                        }
-                        
-                        const response = await fetch(url, {
-                            method: 'GET',
-                            credentials: 'include',
-                            headers: {
-                                'Accept': 'application/json',
-                                'Cache-Control': 'no-cache'
-                            }
-                        });
-                        
-                        const data = await response.json();
-                        console.log('檔案列表回應:', data);
-                        
-                        if (data.success) {
-                            // 🔥 保存返回的 sid 和 token
-                            if (data.sid && data.token) {
-                                console.log('更新 session 信息');
-                                this.sessionInfo.sid = data.sid;
-                                this.sessionInfo.token = data.token;
-                            }
-                            
-                            // 成功載入檔案
-                            this.displayFiles(data.data.files);
-                            this.updateCurrentPath();
-                            this.updateBreadcrumb();
-                            this.autoRetryCount = 0;  // 重置重試計數
-                            return;
-                        } else {
-                            // 檢查是否為 Session 過期
-                            if ((data.message.includes('Session') || data.message.includes('登入')) && attempt === 0) {
-                                console.log('檢測到 Session 過期，嘗試自動重登');
-                                
-                                if (await this.autoRelogin()) {
-                                    console.log('自動重登成功，重新載入檔案');
-                                    continue;  // 重試載入檔案
-                                }
-                            }
-                            
-                            // 無法自動恢復，顯示錯誤
-                            this.isLoggedIn = false;
-                            this.showLoginSection();
-                            this.showMessage('error', '登入已過期，請重新登入');
-                            return;
-                        }
-                    } catch (error) {
-                        if (attempt === 0 && this.storedCredentials) {
-                            console.log('網路錯誤，嘗試自動重登');
-                            if (await this.autoRelogin()) {
-                                continue;
-                            }
-                        }
-                        
-                        console.error('載入檔案錯誤:', error);
-                        this.showMessage('error', `載入錯誤: ${error.message}`);
-                        fileList.innerHTML = '<div style="text-align: center; color: #e53e3e;">載入錯誤</div>';
-                        return;
+                try {
+                    const response = await fetch(`${this.baseURL}/api/files?path=${encodeURIComponent(this.currentPath)}`);
+                    const data = await response.json();
+                    
+                    if (data.success) {
+                        this.displayFiles(data.data.files);
+                        this.updateCurrentPath();
+                        this.updateBreadcrumb();
+                    } else {
+                        this.showMessage('error', `載入失敗: ${data.error}`);
+                        fileList.innerHTML = '<div style="text-align: center; color: #e53e3e;">載入失敗</div>';
                     }
+                } catch (error) {
+                    console.error('載入檔案錯誤:', error);
+                    this.showMessage('error', `載入錯誤: ${error.message}`);
+                    fileList.innerHTML = '<div style="text-align: center; color: #e53e3e;">載入錯誤</div>';
                 }
             }
 
@@ -853,7 +606,7 @@
                 let html = '';
                 
                 // 如果不是根目錄，顯示返回上層目錄
-                if (this.currentPath !== '/' && this.currentPath !== '') {
+                if (this.currentPath !== '/' && this.currentPath !== '/home/www') {
                     html += `
                         <div class="file-item" onclick="nasManager.navigateUp()">
                             <div class="file-icon">📁</div>
@@ -985,7 +738,7 @@
                         window.open(data.data.url, '_blank');
                         this.showMessage('success', `開始下載: ${filename}`);
                     } else {
-                        this.showMessage('error', `下載失敗: ${data.message}`);
+                        this.showMessage('error', `下載失敗: ${data.error || data.message || '未知錯誤'}`);
                     }
                 } catch (error) {
                     this.showMessage('error', `下載錯誤: ${error.message}`);
@@ -1001,7 +754,7 @@
                         this.currentPath + '/' + filename;
                     
                     const response = await fetch(`${this.baseURL}/api/delete`, {
-                        method: 'DELETE',
+                        method: 'POST',
                         headers: {
                             'Content-Type': 'application/json',
                         },
@@ -1014,13 +767,286 @@
                     
                     if (data.success) {
                         this.showMessage('success', `已啟動刪除任務: ${filename}`);
-                        // 延遲重新載入，給刪除操作一些時間
                         setTimeout(() => this.loadFiles(), 1000);
                     } else {
-                        this.showMessage('error', `刪除失敗: ${data.message}`);
+                        this.showMessage('error', `刪除失敗: ${data.error}`);
                     }
                 } catch (error) {
                     this.showMessage('error', `刪除錯誤: ${error.message}`);
+                }
+            }
+
+            async shareFile(filename) {
+                try {
+                    const filePath = this.currentPath.endsWith('/') ? 
+                        this.currentPath + filename : 
+                        this.currentPath + '/' + filename;
+                    
+                    // 創建分享設定對話框
+                    const shareOptions = await this.showShareDialog();
+                    if (!shareOptions) return; // 用戶取消
+                    
+                    const requestBody = {
+                        paths: [filePath]
+                    };
+                    
+                    // 添加可選參數
+                    if (shareOptions.password) {
+                        requestBody.password = shareOptions.password;
+                    }
+                    if (shareOptions.date_expired) {
+                        requestBody.date_expired = shareOptions.date_expired;
+                    }
+                    if (shareOptions.date_available) {
+                        requestBody.date_available = shareOptions.date_available;
+                    }
+                    
+                    const response = await fetch(`${this.baseURL}/api/share`, {
+                        method: 'POST',
+                        headers: {
+                            'Content-Type': 'application/json',
+                        },
+                        body: JSON.stringify(requestBody)
+                    });
+
+                    const data = await response.json();
+                    
+                    if (data.success) {
+                        this.showShareResult(data.data, filename);
+                    } else {
+                        this.showMessage('error', `分享失敗: ${data.error}`);
+                    }
+                } catch (error) {
+                    this.showMessage('error', `分享錯誤: ${error.message}`);
+                }
+            }
+
+            showShareDialog() {
+                return new Promise((resolve) => {
+                    // 創建對話框HTML
+                    const dialogHTML = `
+                        <div id="shareDialog" style="
+                            position: fixed;
+                            top: 0;
+                            left: 0;
+                            width: 100%;
+                            height: 100%;
+                            background: rgba(0,0,0,0.5);
+                            display: flex;
+                            justify-content: center;
+                            align-items: center;
+                            z-index: 1000;
+                        ">
+                            <div style="
+                                background: white;
+                                padding: 30px;
+                                border-radius: 15px;
+                                width: 90%;
+                                max-width: 500px;
+                                box-shadow: 0 8px 32px rgba(0,0,0,0.3);
+                            ">
+                                <h3 style="margin-bottom: 20px; color: #4a5568;">🔗 分享設定</h3>
+                                
+                                <div class="form-group">
+                                    <label>密碼保護 (可選)</label>
+                                    <input type="password" id="sharePassword" placeholder="設定分享密碼">
+                                </div>
+                                
+                                <div class="form-group">
+                                    <label>開始時間 (可選)</label>
+                                    <input type="datetime-local" id="shareStartDate">
+                                </div>
+                                
+                                <div class="form-group">
+                                    <label>過期時間 (可選)</label>
+                                    <input type="datetime-local" id="shareEndDate">
+                                </div>
+                                
+                                <div style="display: flex; gap: 10px; justify-content: flex-end; margin-top: 20px;">
+                                    <button id="cancelShare" class="btn btn-secondary">取消</button>
+                                    <button id="confirmShare" class="btn">建立分享</button>
+                                </div>
+                            </div>
+                        </div>
+                    `;
+                    
+                    document.body.insertAdjacentHTML('beforeend', dialogHTML);
+                    
+                    // 設定預設值（過期時間為7天後）
+                    const now = new Date();
+                    const nextWeek = new Date(now.getTime() + 7 * 24 * 60 * 60 * 1000);
+                    document.getElementById('shareEndDate').value = nextWeek.toISOString().slice(0, 16);
+                    
+                    // 事件監聽
+                    document.getElementById('cancelShare').onclick = () => {
+                        document.getElementById('shareDialog').remove();
+                        resolve(null);
+                    };
+                    
+                    document.getElementById('confirmShare').onclick = () => {
+                        const password = document.getElementById('sharePassword').value;
+                        const startDate = document.getElementById('shareStartDate').value;
+                        const endDate = document.getElementById('shareEndDate').value;
+                        
+                        const options = {};
+                        if (password) options.password = password;
+                        if (startDate) options.date_available = Math.floor(new Date(startDate).getTime() / 1000);
+                        if (endDate) options.date_expired = Math.floor(new Date(endDate).getTime() / 1000);
+                        
+                        document.getElementById('shareDialog').remove();
+                        resolve(options);
+                    };
+                });
+            }
+
+            showShareResult(shareData, filename) {
+                if (!shareData.links || shareData.links.length === 0) {
+                    this.showMessage('error', '未獲得分享連結');
+                    return;
+                }
+                
+                const link = shareData.links[0];
+                console.log('分享數據:', shareData); // 調試用
+                console.log('第一個連結:', link); // 調試用
+                console.log('QR Code 數據:', link.qrcode); // 調試用
+                
+                // QR Code 已經是完整的 data URL 格式
+                const qrCodeSrc = link.qrcode; // 直接使用，因為已經是 "data:image/png;base64,..." 格式
+                
+                // 創建結果對話框
+                const resultHTML = `
+                    <div id="shareResultDialog" style="
+                        position: fixed;
+                        top: 0;
+                        left: 0;
+                        width: 100%;
+                        height: 100%;
+                        background: rgba(0,0,0,0.5);
+                        display: flex;
+                        justify-content: center;
+                        align-items: center;
+                        z-index: 1000;
+                    ">
+                        <div style="
+                            background: white;
+                            padding: 30px;
+                            border-radius: 15px;
+                            width: 90%;
+                            max-width: 600px;
+                            box-shadow: 0 8px 32px rgba(0,0,0,0.3);
+                            max-height: 80vh;
+                            overflow-y: auto;
+                        ">
+                            <h3 style="margin-bottom: 20px; color: #4a5568;">✅ 分享連結已建立</h3>
+                            
+                            <div class="form-group">
+                                <label>檔案名稱</label>
+                                <div style="background: #f7fafc; padding: 10px; border-radius: 8px;">${filename}</div>
+                            </div>
+                            
+                            <div class="form-group">
+                                <label>分享連結</label>
+                                <div style="display: flex; gap: 10px;">
+                                    <input type="text" id="shareUrl" value="${link.url}" readonly style="flex: 1;">
+                                    <button onclick="nasManager.copyToClipboard('${link.url}')" class="btn btn-small">複製</button>
+                                </div>
+                            </div>
+                            
+                            ${link.id ? `
+                            <div class="form-group">
+                                <label>分享ID</label>
+                                <div style="background: #f7fafc; padding: 10px; border-radius: 8px; font-family: monospace;">${link.id}</div>
+                            </div>
+                            ` : ''}
+                            
+                            ${link.date_expired ? `
+                            <div class="form-group">
+                                <label>過期時間</label>
+                                <div style="background: #f7fafc; padding: 10px; border-radius: 8px;">${new Date(link.date_expired * 1000).toLocaleString('zh-TW')}</div>
+                            </div>
+                            ` : ''}
+                            
+                            ${qrCodeSrc ? `
+                            <div class="form-group">
+                                <label>QR Code</label>
+                                <div style="text-align: center; padding: 20px;">
+                                    <img src="${qrCodeSrc}" alt="QR Code" style="max-width: 200px; border: 1px solid #e2e8f0; border-radius: 8px;" 
+                                         onerror="console.error('QR Code 載入失敗:', this.src); this.style.display='none'; this.nextElementSibling.style.display='block';" 
+                                         onload="console.log('QR Code 載入成功:', this.src);">
+                                    <div style="display: none; color: #e53e3e; font-size: 0.9em;">⚠️ QR Code 載入失敗</div>
+                                </div>
+                                <div style="text-align: center;">
+                                    <button onclick="nasManager.downloadQRCode('${qrCodeSrc}', '${filename}')" class="btn btn-small btn-secondary">下載 QR Code</button>
+                                </div>
+                            </div>
+                            ` : `
+                            <div class="form-group">
+                                <div style="text-align: center; color: #f56500; font-size: 0.9em;">⚠️ 無 QR Code 可用</div>
+                            </div>
+                            `}
+                            
+                            ${shareData.has_folder ? `
+                            <div class="form-group">
+                                <div style="color: #f56500; font-size: 0.9em;">⚠️ 包含資料夾</div>
+                            </div>
+                            ` : ''}
+                            
+                            <div style="display: flex; justify-content: flex-end; margin-top: 20px; gap: 10px;">
+                                ${link.url ? `<button onclick="window.open('${link.url}', '_blank')" class="btn" style="background: linear-gradient(135deg, #9f7aea 0%, #805ad5 100%); color: white;">🔗 開啟連結</button>` : ''}
+                                <button onclick="document.getElementById('shareResultDialog').remove()" class="btn">關閉</button>
+                            </div>
+                        </div>
+                    </div>
+                `;
+                
+                document.body.insertAdjacentHTML('beforeend', resultHTML);
+                this.showMessage('success', '分享連結建立成功！');
+            }
+
+            copyToClipboard(text) {
+                if (navigator.clipboard) {
+                    navigator.clipboard.writeText(text).then(() => {
+                        this.showMessage('success', '分享連結已複製到剪貼簿');
+                    }).catch(() => {
+                        // 回退到舊方法
+                        this.fallbackCopyToClipboard(text);
+                    });
+                } else {
+                    this.fallbackCopyToClipboard(text);
+                }
+            }
+
+            fallbackCopyToClipboard(text) {
+                const textArea = document.createElement('textarea');
+                textArea.value = text;
+                document.body.appendChild(textArea);
+                textArea.select();
+                try {
+                    document.execCommand('copy');
+                    this.showMessage('success', '分享連結已複製到剪貼簿');
+                } catch (err) {
+                    this.showMessage('error', '複製失敗，請手動複製');
+                }
+                document.body.removeChild(textArea);
+            }
+
+            // 修改下載 QR Code 方法
+            downloadQRCode(dataURL, filename) {
+                if (!dataURL) {
+                    this.showMessage('error', '無 QR Code 可下載');
+                    return;
+                }
+                
+                try {
+                    const link = document.createElement('a');
+                    link.href = dataURL; // 直接使用 data URL
+                    link.download = `${filename}_qrcode.png`;
+                    link.click();
+                    
+                    this.showMessage('success', 'QR Code 下載成功');
+                } catch (error) {
+                    console.error('QR Code 下載失敗:', error);
+                    this.showMessage('error', 'QR Code 下載失敗');
                 }
             }
 
@@ -1061,7 +1087,7 @@
                             progressBar.style.width = `${progress}%`;
                             statusDiv.textContent = `已完成: ${completed}/${total}`;
                         } else {
-                            this.showMessage('error', `上傳失敗 ${file.name}: ${data.message}`);
+                            this.showMessage('error', `上傳失敗 ${file.name}: ${data.error}`);
                         }
                     } catch (error) {
                         this.showMessage('error', `上傳錯誤 ${file.name}: ${error.message}`);
@@ -1070,7 +1096,6 @@
 
                 if (completed > 0) {
                     this.showMessage('success', `成功上傳 ${completed} 個檔案`);
-                    // 如果當前路徑是上傳路徑，重新載入檔案列表
                     if (this.currentPath === uploadPath) {
                         this.loadFiles();
                     }
@@ -1084,68 +1109,41 @@
                 }, 2000);
             }
 
-            async loadTasks() {
-                const tasksList = document.getElementById('tasksList');
-                tasksList.innerHTML = '<div style="text-align: center;"><span class="loading"></span> 載入中...</div>';
-
-                try {
-                    const response = await fetch(`${this.baseURL}/api/tasks`);
-                    const data = await response.json();
-
-                    if (data.success) {
-                        this.displayTasks(data.data.tasks);
-                    } else {
-                        this.showMessage('error', `載入任務失敗: ${data.message}`);
-                        tasksList.innerHTML = '<div style="text-align: center; color: #e53e3e;">載入失敗</div>';
-                    }
-                } catch (error) {
-                    this.showMessage('error', `載入錯誤: ${error.message}`);
-                    tasksList.innerHTML = '<div style="text-align: center; color: #e53e3e;">載入錯誤</div>';
-                }
-            }
-
-            displayTasks(tasks) {
-                const tasksList = document.getElementById('tasksList');
-                
-                if (!tasks || tasks.length === 0) {
-                    tasksList.innerHTML = '<div style="text-align: center; color: #718096;">目前沒有執行中的任務</div>';
+            async createFolder() {
+                const folderName = document.getElementById('newFolderName').value.trim();
+                if (!folderName) {
+                    this.showMessage('error', '請輸入資料夾名稱');
                     return;
                 }
 
-                let html = '';
-                tasks.forEach(task => {
-                    const statusIcon = task.status === 'running' ? '🔄' : 
-                                     task.status === 'completed' ? '✅' : 
-                                     task.status === 'error' ? '❌' : '⏸️';
-                    
-                    html += `
-                        <div class="file-item">
-                            <div class="file-icon">${statusIcon}</div>
-                            <div class="file-info">
-                                <div class="file-name">${task.name || '未知任務'}</div>
-                                <div class="file-size">狀態: ${task.status || 'unknown'}</div>
-                            </div>
-                        </div>
-                    `;
-                });
+                if (folderName.includes('/') || folderName.includes('\\')) {
+                    this.showMessage('error', '資料夾名稱不能包含斜線');
+                    return;
+                }
 
-                tasksList.innerHTML = html;
-            }
-
-            async toggleDebug() {
                 try {
-                    const response = await fetch(`${this.baseURL}/api/debug/toggle`, {
-                        method: 'POST'
+                    const response = await fetch(`${this.baseURL}/api/create-folder`, {
+                        method: 'POST',
+                        headers: {
+                            'Content-Type': 'application/json',
+                        },
+                        body: JSON.stringify({
+                            folder_path: this.currentPath,
+                            name: folderName
+                        })
                     });
+
                     const data = await response.json();
-                    
+
                     if (data.success) {
-                        this.showMessage('info', data.message);
+                        this.showMessage('success', `資料夾 "${folderName}" 建立成功`);
+                        document.getElementById('newFolderName').value = '';
+                        this.loadFiles();
                     } else {
-                        this.showMessage('error', `Debug 切換失敗: ${data.message}`);
+                        this.showMessage('error', `建立資料夾失敗: ${data.error}`);
                     }
                 } catch (error) {
-                    this.showMessage('error', `Debug 切換錯誤: ${error.message}`);
+                    this.showMessage('error', `建立資料夾錯誤: ${error.message}`);
                 }
             }
 
@@ -1161,17 +1159,11 @@
                     content.classList.remove('active');
                 });
                 document.getElementById(`${tabName}Tab`).classList.add('active');
-
-                // 載入對應內容
-                if (tabName === 'tasks') {
-                    this.loadTasks();
-                }
             }
 
             showLoginSection() {
                 document.getElementById('loginSection').style.display = 'block';
                 document.getElementById('mainContent').style.display = 'none';
-                // 清空登入表單
                 document.getElementById('username').value = '';
                 document.getElementById('password').value = '';
                 document.getElementById('loginMessage').innerHTML = '';
@@ -1182,10 +1174,10 @@
                 document.getElementById('mainContent').style.display = 'block';
             }
 
-            updateSessionInfo(sessionData) {
-                if (sessionData) {
+            updateSessionInfo(data) {
+                if (data.login_time) {
                     document.getElementById('sessionInfo').innerHTML = 
-                        `<small style="color: #718096;">登入時間: ${sessionData.login_time} | 已登入: ${sessionData.elapsed_hours}小時</small>`;
+                        `<small style="color: #718096;">登入時間: ${data.login_time}</small>`;
                 }
             }
 
@@ -1198,7 +1190,6 @@
                 container.innerHTML = '';
                 container.appendChild(messageDiv);
                 
-                // 自動隱藏訊息
                 setTimeout(() => {
                     if (messageDiv.parentNode) {
                         messageDiv.remove();
@@ -1210,17 +1201,6 @@
                 const textElement = document.getElementById(`${action}Text`);
                 const loadingElement = document.getElementById(`${action}Loading`);
                 
-                // 針對 createFolderBtn 可能沒有 loginText, loginLoading 這樣的元素
-                // 需要通用化或為 createFolderBtn 增加特定處理
-                if (action === 'createFolder') { // 簡易處理，實際應用可能需要更完善的 UI 反饋
-                    const btn = document.getElementById('createFolderBtn');
-                    if (btn) {
-                        btn.disabled = loading;
-                        btn.innerHTML = loading ? '<span class="loading"></span> 建立中...' : '➕ 建立資料夾';
-                    }
-                    return;
-                }
-
                 if (textElement && loadingElement) {
                     if (loading) {
                         textElement.classList.add('hidden');
@@ -1229,181 +1209,6 @@
                         textElement.classList.remove('hidden');
                         loadingElement.classList.add('hidden');
                     }
-                }
-            }
-
-            async createFolder() {
-                const folderName = document.getElementById('newFolderName').value.trim();
-                if (!folderName) {
-                    this.showMessage('error', '請輸入資料夾名稱');
-                    return;
-                }
-                // 新增：驗證資料夾名稱是否包含斜線
-                if (folderName.includes('/') || folderName.includes('\\')) {
-                    this.showMessage('error', '資料夾名稱不能包含斜線 (/) 或反斜線 (\\)');
-                    return;
-                }
-
-                if (!this.isLoggedIn) {
-                    this.showMessage('error', '請先登入');
-                    return;
-                }
-
-                this.setLoading('createFolder', true); // 假設有對應的 loading 狀態處理
-
-                try {
-                    const response = await fetch(`${this.baseURL}/api/folder`, {
-                        method: 'POST',
-                        headers: {
-                            'Content-Type': 'application/json',
-                            // 注意：如果後端 get_nas_session 依賴 Authorization Bearer token,
-                            // 則需要像其他請求一樣傳遞它。
-                            // 目前 file_routes.py 中的 get_nas_session 支援 cookie 和 token
-                        },
-                        body: JSON.stringify({
-                            parent_path: this.currentPath,
-                            folder_name: folderName,
-                            force_parent: false // 或 true，根據需求
-                        })
-                    });
-
-                    const data = await response.json();
-
-                    if (data.success) {
-                        this.showMessage('success', `資料夾 "${folderName}" 建立成功`);
-                        document.getElementById('newFolderName').value = ''; // 清空輸入框
-                        this.loadFiles(); // 重新載入檔案列表
-                    } else {
-                        this.showMessage('error', `建立資料夾失敗: ${data.message || '未知錯誤'}`);
-                    }
-                } catch (error) {
-                    this.showMessage('error', `建立資料夾時發生錯誤: ${error.message}`);
-                } finally {
-                    this.setLoading('createFolder', false); // 假設有對應的 loading 狀態處理
-                    // 如果沒有專門的 createFolder loading, 可以移除這兩行 setLoading
-                }
-            }
-
-            async shareFile(filename) {
-                try {
-                    const filePath = this.currentPath.endsWith('/') ? 
-                        this.currentPath + filename : 
-                        this.currentPath + '/' + filename;
-                    
-                    console.log('準備分享檔案:', filePath); // 調試用
-                    
-                    // 根據您的 API，需要傳送 paths 陣列
-                    const response = await fetch(`${this.baseURL}/api/share`, {
-                        method: 'POST',
-                        headers: {
-                            'Content-Type': 'application/json',
-                        },
-                        body: JSON.stringify({
-                            paths: [filePath]  // API 要求是路徑陣列
-                        })
-                    });
-
-                    const data = await response.json();
-                    console.log('分享 API 回應:', data); // 調試用
-                    
-                    if (data.success) {
-                        // 顯示分享連結
-                        this.showShareDialog(filename, data.data);
-                        this.showMessage('success', `檔案 "${filename}" 分享成功`);
-                    } else {
-                        this.showMessage('error', `分享失敗: ${data.message}`);
-                    }
-                } catch (error) {
-                    console.error('分享錯誤:', error); // 調試用
-                    this.showMessage('error', `分享錯誤: ${error.message}`);
-                }
-            }
-
-            showShareDialog(filename, shareData) {
-                // 根據 nas_service.py 的回應格式，shareData 包含 links 陣列
-                const links = shareData.links || [];
-                const firstLink = links[0] || {};
-                
-                console.log('分享數據:', shareData); // 調試用
-                console.log('第一個連結:', firstLink); // 調試用
-                
-                // 創建分享對話框
-                const dialog = document.createElement('div');
-                dialog.className = 'share-dialog';
-                dialog.innerHTML = `
-                    <div class="share-dialog-content">
-                        <h3>📤 分享檔案: ${filename}</h3>
-                        <div class="share-info">
-                            ${links.length > 0 ? `
-                            <div class="form-group">
-                                <label>分享連結:</label>
-                                <div class="share-link-container">
-                                    <input type="text" id="shareLink" value="${firstLink.url || firstLink.link || ''}" readonly>
-                                    <button class="btn btn-small" onclick="nasManager.copyShareLink()">📋 複製</button>
-                                </div>
-                            </div>
-                            ${firstLink.id ? `
-                            <div class="form-group">
-                                <label>分享 ID:</label>
-                                <span class="share-id">${firstLink.id}</span>
-                            </div>
-                            ` : ''}
-                            ${firstLink.date_expired ? `
-                            <div class="form-group">
-                                <label>過期時間:</label>
-                                <span class="expire-time">${firstLink.date_expired || '無限期'}</span>
-                            </div>
-                            ` : ''}
-                            ${firstLink.qrcode ? `
-                            <div class="form-group">
-                                <label>QR Code:</label>
-                                <div class="qr-code">
-                                    <img src="${firstLink.qrcode}" alt="QR Code" onerror="this.style.display='none'" onload="console.log('QR Code 載入成功')">
-                                </div>
-                            </div>
-                            ` : `
-                            <div class="form-group">
-                                <span style="color: #f56500; font-size: 0.9em;">⚠️ 無 QR Code 可用</span>
-                            </div>
-                            `}
-                            ` : `
-                            <div class="form-group">
-                                <span style="color: #e53e3e;">無法獲取分享連結資訊</span>
-                            </div>
-                            `}
-                            ${shareData.has_folder ? `
-                            <div class="form-group">
-                                <span style="color: #f56500; font-size: 0.9em;">⚠️ 包含資料夾</span>
-                            </div>
-                            ` : ''}
-                        </div>
-                        <div class="share-actions">
-                            <button class="btn btn-secondary" onclick="nasManager.closeShareDialog()">關閉</button>
-                            ${links.length > 0 ? `<button class="btn btn-success" onclick="nasManager.copyShareLink()">複製連結</button>` : ''}
-                            ${firstLink.url ? `<button class="btn" style="background: linear-gradient(135deg, #9f7aea 0%, #805ad5 100%); color: white;" onclick="window.open('${firstLink.url}', '_blank')">🔗 開啟連結</button>` : ''}
-                        </div>
-                    </div>
-                    <div class="share-dialog-overlay" onclick="nasManager.closeShareDialog()"></div>
-                `;
-                
-                document.body.appendChild(dialog);
-            }
-
-            copyShareLink() {
-                const linkInput = document.getElementById('shareLink');
-                if (linkInput && linkInput.value) {
-                    linkInput.select();
-                    document.execCommand('copy');
-                    this.showMessage('success', '分享連結已複製到剪貼簿');
-                } else {
-                    this.showMessage('error', '無法複製分享連結');
-                }
-            }
-
-            closeShareDialog() {
-                const dialog = document.querySelector('.share-dialog');
-                if (dialog) {
-                    dialog.remove();
                 }
             }
         }
