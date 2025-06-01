@@ -1,28 +1,76 @@
-#!/usr/bin/env python3
-# -*- coding: utf-8 -*-
-"""
-SimpleNAS Flask API 完整測試腳本
-基於 API.md 文檔進行全面測試
-"""
-
 import requests
 import json
 import time
 import os
-import base64
 from datetime import datetime, timedelta
 from io import BytesIO
 
 class SimpleNASApiTester:
-    def __init__(self, base_url="http://localhost:5000"):
-        self.base_url = base_url
+    def __init__(self, config_file="config.json"):
+        self.config_file = config_file
+        self.config = self.load_config()
+        self.base_url = self.get_base_url()
         self.session = requests.Session()
         self.login_credentials = None
         
+        print(f"📋 配置信息:")
+        print(f"   伺服器地址: {self.base_url}")
+        print(f"   NAS 地址: {self.config['NAS']['NAS_BASE_URL']}")
+        print(f"   Session 檔案: {self.config['SESSION']['SESSION_FILE']}")
+        print(f"   Session 過期天數: {self.config['SESSION']['SESSION_EXPIRE_DAYS']}")
+        
+    def load_config(self):
+        """載入配置檔案"""
+        try:
+            with open(self.config_file, 'r', encoding='utf-8') as f:
+                config = json.load(f)
+                
+            # 驗證必要的配置項目
+            required_keys = {
+                'NAS': ['NAS_BASE_URL', 'NAS_TIMEOUT'],
+                'SESSION': ['SESSION_FILE', 'SESSION_EXPIRE_DAYS'],
+                'FLASK': ['HOST', 'PORT', 'DEBUG']
+            }
+            
+            for section, keys in required_keys.items():
+                if section not in config:
+                    raise ValueError(f"配置檔案缺少 {section} 段落")
+                for key in keys:
+                    if key not in config[section]:
+                        raise ValueError(f"配置檔案 {section} 段落缺少 {key}")
+            
+            print(f"✅ 成功載入配置檔案: {self.config_file}")
+            return config
+            
+        except FileNotFoundError:
+            print(f"❌ 找不到配置檔案: {self.config_file}")
+            print("請確認 config.json 檔案存在於當前目錄")
+            exit(1)
+        except json.JSONDecodeError as e:
+            print(f"❌ 配置檔案格式錯誤: {e}")
+            print("請檢查 config.json 檔案的 JSON 格式")
+            exit(1)
+        except ValueError as e:
+            print(f"❌ 配置檔案內容錯誤: {e}")
+            exit(1)
+    
+    def get_base_url(self):
+        """根據配置生成基礎 URL"""
+        host = self.config['FLASK']['HOST']
+        port = self.config['FLASK']['PORT']
+        
+        # 如果 HOST 是 0.0.0.0，則使用 localhost 進行測試
+        if host == "0.0.0.0":
+            host = "localhost"
+        elif host == "127.0.0.1":
+            host = "localhost"
+        
+        return f"http://{host}:{port}"
+    
     def log_test(self, test_name, status, message="", data=None):
         """統一的測試日誌格式"""
         status_icon = "✅" if status else "❌"
-        print(f"{status_icon} {test_name}: {message}")
+        print(f"{status_icon} {test_name: <20}: {message}")
         if data and isinstance(data, dict):
             print(f"   詳細: {json.dumps(data, indent=4, ensure_ascii=False)}")
         elif data:
@@ -32,7 +80,8 @@ class SimpleNASApiTester:
         """檢查服務器連線"""
         print("🔗 檢查服務器連線...")
         try:
-            response = self.session.get(f"{self.base_url}/", timeout=10)
+            timeout = self.config['NAS']['NAS_TIMEOUT']
+            response = self.session.get(f"{self.base_url}/", timeout=timeout)
             if response.status_code == 200:
                 data = response.json()
                 self.log_test(
@@ -45,10 +94,57 @@ class SimpleNASApiTester:
                 self.log_test("服務器連線", False, f"HTTP 狀態碼: {response.status_code}")
                 return False
         except requests.exceptions.ConnectionError:
-            self.log_test("服務器連線", False, "無法連接到服務器，請確認服務器是否運行在 http://localhost:5000")
+            self.log_test(
+                "服務器連線", 
+                False, 
+                f"無法連接到服務器，請確認服務器是否運行在 {self.base_url}"
+            )
             return False
         except Exception as e:
             self.log_test("服務器連線", False, f"連線錯誤: {str(e)}")
+            return False
+
+    def test_health_check(self):
+        """測試 GET /health - 健康檢查"""
+        print("\n🧪 測試健康檢查...")
+        try:
+            response = self.session.get(f"{self.base_url}/health")
+            
+            if response.status_code == 200:
+                data = response.json()
+                if data.get("status") == "healthy":
+                    self.log_test(
+                        "健康檢查", 
+                        True, 
+                        f"系統健康 - 版本: {data.get('version', 'Unknown')}"
+                    )
+                    
+                    # 檢查系統檢查項目
+                    system_checks = data.get("system_checks", {})
+                    session_stats = data.get("session_stats", {})
+                    
+                    print(f"   📊 系統狀態:")
+                    print(f"      配置檔案: {system_checks.get('config_file', 'Unknown')}")
+                    print(f"      Session 檔案: {system_checks.get('session_file', 'Unknown')}")
+                    print(f"      NAS 地址: {system_checks.get('nas_base_url', 'Unknown')}")
+                    print(f"      Session 過期天數: {system_checks.get('session_expire_days', 'Unknown')}")
+                    
+                    print(f"   📈 Session 統計:")
+                    print(f"      總 Sessions: {session_stats.get('total_sessions', 0)}")
+                    print(f"      活躍 Sessions: {session_stats.get('active_sessions', 0)}")
+                    print(f"      過期 Sessions: {session_stats.get('expired_sessions', 0)}")
+                    
+                    return True
+                else:
+                    self.log_test("健康檢查", False, f"系統狀態: {data.get('status', 'Unknown')}")
+                    if 'error' in data:
+                        print(f"   錯誤: {data['error']}")
+                    return False
+            else:
+                self.log_test("健康檢查", False, f"HTTP 狀態碼: {response.status_code}")
+                return False
+        except Exception as e:
+            self.log_test("健康檢查", False, f"錯誤: {str(e)}")
             return False
 
     # ============= 身份驗證測試 =============
@@ -72,10 +168,26 @@ class SimpleNASApiTester:
                     )
                     return False
                 
+                # 驗證配置資訊是否正確
+                system_info = data.get('system_info', {})
+                expected_session_file = self.config['SESSION']['SESSION_FILE']
+                expected_expire_days = self.config['SESSION']['SESSION_EXPIRE_DAYS']
+                
+                if (system_info.get('session_file') == expected_session_file and 
+                    system_info.get('session_expire_days') == expected_expire_days):
+                    config_match = True
+                else:
+                    config_match = False
+                    print(f"   ⚠️ 配置不匹配:")
+                    print(f"      期望 Session 檔案: {expected_session_file}")
+                    print(f"      實際 Session 檔案: {system_info.get('session_file')}")
+                    print(f"      期望過期天數: {expected_expire_days}")
+                    print(f"      實際過期天數: {system_info.get('session_expire_days')}")
+                
                 self.log_test(
                     "API 文檔", 
                     True, 
-                    f"{data['title']} v{data['version']}"
+                    f"{data['title']} v{data['version']} {'(配置匹配)' if config_match else '(配置不匹配)'}"
                 )
                 return True
             else:
@@ -94,7 +206,8 @@ class SimpleNASApiTester:
             response = self.session.post(
                 f"{self.base_url}/api/login",
                 json={},
-                headers={"Content-Type": "application/json"}
+                headers={"Content-Type": "application/json"},
+                timeout=self.config['NAS']['NAS_TIMEOUT']
             )
             
             if response.status_code == 400:
@@ -116,7 +229,8 @@ class SimpleNASApiTester:
             response = self.session.post(
                 f"{self.base_url}/api/login",
                 json={"account": "invalid_user", "password": "invalid_pass"},
-                headers={"Content-Type": "application/json"}
+                headers={"Content-Type": "application/json"},
+                timeout=self.config['NAS']['NAS_TIMEOUT']
             )
             
             if response.status_code in [400, 500]:
@@ -150,7 +264,8 @@ class SimpleNASApiTester:
             response = self.session.post(
                 f"{self.base_url}/api/login",
                 json=self.login_credentials,
-                headers={"Content-Type": "application/json"}
+                headers={"Content-Type": "application/json"},
+                timeout=self.config['NAS']['NAS_TIMEOUT']
             )
             
             if response.status_code == 200:
@@ -172,6 +287,14 @@ class SimpleNASApiTester:
                         True, 
                         f"登入成功，Session ID: {data['session_id'][:8]}..."
                     )
+                    
+                    # 檢查是否成功創建 session 檔案
+                    session_file = self.config['SESSION']['SESSION_FILE']
+                    if os.path.exists(session_file):
+                        print(f"   ✅ Session 檔案已創建: {session_file}")
+                    else:
+                        print(f"   ⚠️ Session 檔案未找到: {session_file}")
+                    
                     return True
                 else:
                     self.log_test("有效登入", False, data.get("error", "未知錯誤"))
@@ -187,7 +310,10 @@ class SimpleNASApiTester:
         """測試 GET /api/status - 已登入狀態"""
         print("\n🧪 測試登入狀態檢查...")
         try:
-            response = self.session.get(f"{self.base_url}/api/status")
+            response = self.session.get(
+                f"{self.base_url}/api/status",
+                timeout=self.config['NAS']['NAS_TIMEOUT']
+            )
             
             if response.status_code == 200:
                 data = response.json()
@@ -227,7 +353,8 @@ class SimpleNASApiTester:
         try:
             response = self.session.get(
                 f"{self.base_url}/api/files",
-                params={"path": path}
+                params={"path": path},
+                timeout=self.config['NAS']['NAS_TIMEOUT']
             )
             
             if response.status_code == 200:
@@ -283,7 +410,7 @@ class SimpleNASApiTester:
         print(f"\n🧪 測試檔案上傳 (目標: {target_path}/{test_filename})...")
         
         # 創建測試檔案內容
-        test_content = f"測試檔案內容\n建立時間: {datetime.now()}\n測試用途: API 自動化測試"
+        test_content = f"測試檔案內容\n建立時間: {datetime.now()}\n測試用途: API 自動化測試\n配置檔案: {self.config_file}"
         test_file_data = test_content.encode('utf-8')
         
         try:
@@ -296,7 +423,8 @@ class SimpleNASApiTester:
             response = self.session.post(
                 f"{self.base_url}/api/upload",
                 files=files,
-                data=data
+                data=data,
+                timeout=self.config['NAS']['NAS_TIMEOUT']
             )
             
             if response.status_code == 200:
@@ -338,7 +466,8 @@ class SimpleNASApiTester:
             response = self.session.post(
                 f"{self.base_url}/api/create-folder",
                 json=request_data,
-                headers={"Content-Type": "application/json"}
+                headers={"Content-Type": "application/json"},
+                timeout=self.config['NAS']['NAS_TIMEOUT']
             )
             
             if response.status_code == 200:
@@ -362,7 +491,7 @@ class SimpleNASApiTester:
         except Exception as e:
             self.log_test("建立資料夾", False, f"錯誤: {str(e)}")
             return False, None
-    
+
     def test_download_file(self, file_path=None):
         """測試 GET /api/download - 取得下載連結"""
         if not file_path:
@@ -373,7 +502,8 @@ class SimpleNASApiTester:
         try:
             response = self.session.get(
                 f"{self.base_url}/api/download",
-                params={"path": file_path}
+                params={"path": file_path},
+                timeout=self.config['NAS']['NAS_TIMEOUT']
             )
             
             if response.status_code == 200:
@@ -383,10 +513,20 @@ class SimpleNASApiTester:
                     download_url = download_data.get("url")
                     
                     if download_url:
+                        # 驗證下載連結是否包含正確的 NAS 基礎 URL
+                        nas_base = self.config['NAS']['NAS_BASE_URL'].replace('/webapi/entry.cgi', '')
+                        if nas_base in download_url:
+                            nas_match = True
+                        else:
+                            nas_match = False
+                            print(f"   ⚠️ 下載連結 NAS 地址不匹配:")
+                            print(f"      期望包含: {nas_base}")
+                            print(f"      實際連結: {download_url[:100]}...")
+                        
                         self.log_test(
                             "檔案下載連結", 
                             True, 
-                            f"成功生成下載連結"
+                            f"成功生成下載連結 {'(NAS地址匹配)' if nas_match else '(NAS地址不匹配)'}"
                         )
                         print(f"   連結: {download_url[:100]}...")
                         return True
@@ -408,7 +548,7 @@ class SimpleNASApiTester:
         except Exception as e:
             self.log_test("檔案下載連結", False, f"錯誤: {str(e)}")
             return False
-    
+
     def test_delete_files(self, paths_to_delete=None):
         """測試 POST /api/delete - 刪除檔案/資料夾"""
         if not paths_to_delete:
@@ -424,7 +564,8 @@ class SimpleNASApiTester:
             response = self.session.post(
                 f"{self.base_url}/api/delete",
                 json=request_data,
-                headers={"Content-Type": "application/json"}
+                headers={"Content-Type": "application/json"},
+                timeout=self.config['NAS']['NAS_TIMEOUT']
             )
             
             if response.status_code == 200:
@@ -481,7 +622,8 @@ class SimpleNASApiTester:
             response = self.session.post(
                 f"{self.base_url}/api/share",
                 json=request_data,
-                headers={"Content-Type": "application/json"}
+                headers={"Content-Type": "application/json"},
+                timeout=self.config['NAS']['NAS_TIMEOUT']
             )
             
             if response.status_code == 200:
@@ -528,7 +670,7 @@ class SimpleNASApiTester:
         except Exception as e:
             self.log_test("建立分享連結", False, f"錯誤: {str(e)}")
             return False
-    
+
     def test_compress_files(self, source_paths=None, dest_path=None):
         """測試 POST /api/compress - 壓縮檔案"""
         if not source_paths:
@@ -564,13 +706,15 @@ class SimpleNASApiTester:
             response = self.session.post(
                 f"{self.base_url}/api/compress",
                 json=request_data,
-                headers={"Content-Type": "application/json"}
+                headers={"Content-Type": "application/json"},
+                timeout=self.config['NAS']['NAS_TIMEOUT']
             )
             
             if response.status_code == 200:
                 data = response.json()
                 if data.get("success"):
-                    task_id = data.get("task_id")
+                    task_info = data.get("data", {})
+                    task_id = task_info.get("taskid", "Unknown")
                     self.log_test(
                         "檔案壓縮", 
                         True, 
@@ -597,7 +741,10 @@ class SimpleNASApiTester:
         print(f"\n🧪 測試 Sessions 列表...")
         
         try:
-            response = self.session.get(f"{self.base_url}/api/sessions")
+            response = self.session.get(
+                f"{self.base_url}/api/sessions",
+                timeout=self.config['NAS']['NAS_TIMEOUT']
+            )
             
             if response.status_code == 200:
                 data = response.json()
@@ -610,6 +757,22 @@ class SimpleNASApiTester:
                         True, 
                         f"成功獲取 {total_sessions} 個 session"
                     )
+                    
+                    # 檢查 session 檔案
+                    session_file = self.config['SESSION']['SESSION_FILE']
+                    if os.path.exists(session_file):
+                        print(f"   ✅ Session 檔案存在: {session_file}")
+                        
+                        # 檢查檔案內容
+                        try:
+                            with open(session_file, 'r', encoding='utf-8') as f:
+                                file_data = json.load(f)
+                                file_sessions = len(file_data) if isinstance(file_data, dict) else 0
+                                print(f"   📊 檔案中的 Session 數量: {file_sessions}")
+                        except:
+                            print(f"   ⚠️ 無法讀取 Session 檔案內容")
+                    else:
+                        print(f"   ❌ Session 檔案不存在: {session_file}")
                     
                     for i, session_info in enumerate(sessions[:3]):  # 顯示前3個
                         print(f"   📋 Session {i+1}:")
@@ -636,7 +799,10 @@ class SimpleNASApiTester:
         print(f"\n🧪 測試登出功能...")
         
         try:
-            response = self.session.post(f"{self.base_url}/api/logout")
+            response = self.session.post(
+                f"{self.base_url}/api/logout",
+                timeout=self.config['NAS']['NAS_TIMEOUT']
+            )
             
             if response.status_code == 200:
                 data = response.json()
@@ -662,7 +828,10 @@ class SimpleNASApiTester:
         print(f"\n🧪 測試登出後狀態...")
         
         try:
-            response = self.session.get(f"{self.base_url}/api/status")
+            response = self.session.get(
+                f"{self.base_url}/api/status",
+                timeout=self.config['NAS']['NAS_TIMEOUT']
+            )
             
             if response.status_code == 200:
                 data = response.json()
@@ -707,12 +876,17 @@ class SimpleNASApiTester:
         for method, endpoint, params in unauthorized_endpoints:
             try:
                 if method == "GET":
-                    response = self.session.get(f"{self.base_url}{endpoint}", params=params)
+                    response = self.session.get(
+                        f"{self.base_url}{endpoint}", 
+                        params=params,
+                        timeout=self.config['NAS']['NAS_TIMEOUT']
+                    )
                 else:
                     response = self.session.post(
                         f"{self.base_url}{endpoint}",
                         json=params,
-                        headers={"Content-Type": "application/json"}
+                        headers={"Content-Type": "application/json"},
+                        timeout=self.config['NAS']['NAS_TIMEOUT']
                     )
                 
                 if response.status_code == 401:
@@ -725,7 +899,11 @@ class SimpleNASApiTester:
                 print(f"   ❌ {method} {endpoint}: 錯誤 {str(e)}")
                 all_passed = False
         
-        self.log_test("未授權訪問測試", all_passed, "所有需要認證的端點都正確拒絕未授權訪問" if all_passed else "部分端點未正確處理未授權訪問")
+        self.log_test(
+            "未授權訪問測試", 
+            all_passed, 
+            "所有需要認證的端點都正確拒絕未授權訪問" if all_passed else "部分端點未正確處理未授權訪問"
+        )
         return all_passed
     
     def test_invalid_endpoints(self):
@@ -743,7 +921,10 @@ class SimpleNASApiTester:
         
         for endpoint in invalid_endpoints:
             try:
-                response = self.session.get(f"{self.base_url}{endpoint}")
+                response = self.session.get(
+                    f"{self.base_url}{endpoint}",
+                    timeout=self.config['NAS']['NAS_TIMEOUT']
+                )
                 
                 if response.status_code == 404:
                     print(f"   ✅ {endpoint}: 正確返回 404")
@@ -755,7 +936,11 @@ class SimpleNASApiTester:
                 print(f"   ❌ {endpoint}: 錯誤 {str(e)}")
                 all_passed = False
         
-        self.log_test("無效端點測試", all_passed, "所有無效端點都正確返回 404" if all_passed else "部分無效端點未正確處理")
+        self.log_test(
+            "無效端點測試", 
+            all_passed, 
+            "所有無效端點都正確返回 404" if all_passed else "部分無效端點未正確處理"
+        )
         return all_passed
 
     # ============= 完整測試套件 =============
@@ -767,6 +952,9 @@ class SimpleNASApiTester:
         print("="*60)
         
         results = []
+        
+        # 健康檢查測試
+        results.append(("健康檢查", self.test_health_check()))
         
         # API 文檔測試
         results.append(("API 文檔", self.test_api_docs()))
@@ -923,10 +1111,19 @@ class SimpleNASApiTester:
         passed = sum(1 for _, result in results if result)
         failed = len(results) - passed
         
-        print(f"\n總測試數: {len(results)}")
-        print(f"✅ 通過: {passed}")
-        print(f"❌ 失敗: {failed}")
-        print(f"📈 成功率: {(passed/len(results)*100):.1f}%")
+        print(f"\n📋 測試配置:")
+        print(f"   配置檔案: {self.config_file}")
+        print(f"   伺服器地址: {self.base_url}")
+        print(f"   NAS 地址: {self.config['NAS']['NAS_BASE_URL']}")
+        print(f"   超時設定: {self.config['NAS']['NAS_TIMEOUT']} 秒")
+        print(f"   Session 檔案: {self.config['SESSION']['SESSION_FILE']}")
+        print(f"   Session 過期: {self.config['SESSION']['SESSION_EXPIRE_DAYS']} 天")
+        
+        print(f"\n📈 測試結果:")
+        print(f"   總測試數: {len(results)}")
+        print(f"   ✅ 通過: {passed}")
+        print(f"   ❌ 失敗: {failed}")
+        print(f"   📊 成功率: {(passed/len(results)*100):.1f}%")
         
         if failed > 0:
             print(f"\n❌ 失敗的測試:")
@@ -943,11 +1140,20 @@ class SimpleNASApiTester:
 
 def main():
     print("🧪 SimpleNAS Flask API 完整測試工具")
-    print("基於 API.md 文檔進行全面測試")
-    print("確保 API 服務器正在 http://localhost:5000 上運行")
+    print("基於 API.md 文檔和 config.json 配置進行全面測試")
     print("-" * 60)
     
-    tester = SimpleNASApiTester()
+    # 檢查配置檔案是否存在
+    config_file = "config.json"
+    if not os.path.exists(config_file):
+        print(f"❌ 找不到配置檔案: {config_file}")
+        print("請確認 config.json 檔案存在於當前目錄")
+        return
+    
+    try:
+        tester = SimpleNASApiTester(config_file)
+    except SystemExit:
+        return
     
     print("選擇測試模式:")
     print("1. 執行完整測試套件 (推薦)")
@@ -995,21 +1201,22 @@ def main():
     elif choice == "7":
         print("\n可用的個別測試:")
         test_methods = {
-            "1": ("API 文檔", tester.test_api_docs),
-            "2": ("無效登入", tester.test_login_invalid),
-            "3": ("有效登入", tester.test_login_valid),
-            "4": ("登入狀態檢查", tester.test_status_logged_in),
-            "5": ("檔案列表", tester.test_list_files),
-            "6": ("檔案上傳", tester.test_upload_file),
-            "7": ("建立資料夾", tester.test_create_folder),
-            "8": ("下載連結", tester.test_download_file),
-            "9": ("檔案刪除", tester.test_delete_files),
-            "10": ("建立分享連結", tester.test_create_share),
-            "11": ("檔案壓縮", tester.test_compress_files),
-            "12": ("Sessions 列表", tester.test_list_sessions),
-            "13": ("登出功能", tester.test_logout),
-            "14": ("未授權訪問", tester.test_unauthorized_access),
-            "15": ("無效端點", tester.test_invalid_endpoints)
+            "1": ("健康檢查", tester.test_health_check),
+            "2": ("API 文檔", tester.test_api_docs),
+            "3": ("無效登入", tester.test_login_invalid),
+            "4": ("有效登入", tester.test_login_valid),
+            "5": ("登入狀態檢查", tester.test_status_logged_in),
+            "6": ("檔案列表", tester.test_list_files),
+            "7": ("檔案上傳", tester.test_upload_file),
+            "8": ("建立資料夾", tester.test_create_folder),
+            "9": ("下載連結", tester.test_download_file),
+            "10": ("檔案刪除", tester.test_delete_files),
+            "11": ("建立分享連結", tester.test_create_share),
+            "12": ("檔案壓縮", tester.test_compress_files),
+            "13": ("Sessions 列表", tester.test_list_sessions),
+            "14": ("登出功能", tester.test_logout),
+            "15": ("未授權訪問", tester.test_unauthorized_access),
+            "16": ("無效端點", tester.test_invalid_endpoints)
         }
         
         for key, (name, _) in test_methods.items():
@@ -1021,7 +1228,7 @@ def main():
             test_name, test_method = test_methods[test_choice]
             if tester.check_server_connection():
                 # 對於需要登入的測試，先檢查登入狀態
-                if test_choice in ["4", "5", "6", "7", "8", "9", "10", "11", "12", "13"]:
+                if test_choice in ["5", "6", "7", "8", "9", "10", "11", "12", "13", "14"]:
                     print("此測試需要先登入...")
                     if tester.test_login_valid():
                         result = test_method()

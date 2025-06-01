@@ -27,8 +27,6 @@
 
 ### 使用者介面
 - 響應式設計（支援手機、平板）
-- 現代化 UI 設計
-- 麵包屑導航
 - 即時操作回饋
 - 拖放上傳
 
@@ -44,46 +42,6 @@ SimpleNAS/
 ├── session.json       # Session 持久化儲存檔案
 ├── README.md          # 專案說明文件
 └── API.md             # API 接口說明文件
-```
-
-## 技術特色
-
-### 多用戶 Session 管理
-- **檔案儲存**：Session 資料持久化到 `session.json`
-- **多用戶支援**：同時支援多個用戶登入不同帳號
-- **自動過期**：預設一年後自動過期
-- **活動追蹤**：記錄最後活動時間
-- **自動清理**：啟動時自動清理過期 sessions
-- **服務器重啟存活**：服務器重啟後 session 仍然有效
-
-### 安全機制
-- 使用 Synology 官方 API
-- CSRF Token 驗證
-- Session ID 驗證
-- 多用戶 Session 隔離
-- 自動 Session 過期機制
-
-### 檔案下載優化
-- 使用 Synology fbdownload 端點
-- 十六進制路徑編碼
-- 防止快取機制
-- 用戶專屬 Session 驗證
-
-## 快速開始
-
-### 環境需求
-- Python 3.7+
-- Flask
-- requests
-
-### 安裝依賴
-```bash
-pip install -r requirements.txt
-```
-
-### 啟動服務
-```bash
-python run.py
 ```
 
 ### 訪問應用
@@ -129,10 +87,16 @@ FLASK_SECRET_KEY=your-very-secret-key-change-this-in-production
 - 將 `您的NAS網址.com` 替換為實際的 NAS 位址
 - `HOST` 設為 `127.0.0.1` 僅供本機存取，設為 `0.0.0.0` 可供區網存取
 - 生產環境請將 `DEBUG` 設為 `false`
+- 根據部屬環境不同，`index.html`測試網頁的`baseURL`參數可能需做更改
 
 #### 啟動服務
 ```bash
 python run.py
+```
+
+#### 測試服務
+```bash
+python test.py
 ```
 
 #### 使用服務
