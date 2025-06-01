@@ -1,10 +1,10 @@
-# SimpleNAS API 文件
+# DSM-API-Wrapper API 文件
 
-本文檔介紹 SimpleNAS 系統的 API 接口及其使用方法。
+本文檔介紹 DSM-API-Wrapper 系統的 API 接口及其使用方法。
 
 ## 總覽
 
-- **基礎 URL**：所有 API 請求的基礎 URL 預設為執行服務器的主機和端口。
+- **基礎 URL**：所有 API 請求的基礎 URL 預設為執行伺服器的主機和端口。
 - **認證**：除了 `/api/login`、`/api/status` (未登入時) 和 `/health`，所有 API 請求都需要在 Header 中傳遞有效的 `session_id` (通常由客戶端自動處理，例如通過 Cookie)。部分直接與 Synology NAS 通信的 API 會使用內部管理的 `_sid` 和 `SynoToken`。
 - **請求格式**：POST 請求的 Body 應為 JSON 格式，`Content-Type` 設為 `application/json`。檔案上傳使用 `multipart/form-data`。
 - **回應格式**：所有 API 回應均為 JSON 格式。成功的回應通常包含 `"success": true`，失敗則包含 `"success": false` 和一個 `error` 訊息。
@@ -69,7 +69,7 @@
       "success": true,
       "sid": "Synology_DSM_Session_ID",
       "syno_token": "Synology_CSRF_Token",
-      "session_id": "simpleNAS_internal_session_id"
+      "session_id": "DSM_internal_session_id"
   }
   ```
 - **失敗回應** (400 Bad Request / 500 Internal Server Error):
@@ -90,7 +90,7 @@
       "success": true,
       "logged_in": true,
       "account": "current_logged_in_username",
-      "session_id": "simpleNAS_internal_session_id_prefix...",
+      "session_id": "DSM_internal_session_id_prefix...",
       "login_time": "YYYY-MM-DD HH:MM:SS",
       "last_activity": "YYYY-MM-DD HH:MM:SS",
       "expires_at": "YYYY-MM-DD HH:MM:SS"

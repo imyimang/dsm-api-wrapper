@@ -9,7 +9,7 @@ PORT = config_data["FLASK"]["PORT"]
 DEBUG = config_data["FLASK"]["DEBUG"]
 
 if __name__ == '__main__':
-    print("=== SimpleNAS Flask API Server ===")
+    print("=== DSM Flask API Server ===")
     print("伺服器啟動中...")
     print(f"伺服器地址: http://{HOST}:{PORT}")
     app.run(host=HOST, port=PORT, debug=DEBUG)

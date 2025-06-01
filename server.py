@@ -7,9 +7,10 @@ from dotenv import load_dotenv
 import uuid
 from datetime import datetime
 from router import register_routes
+import urllib3
 
 # 禁用SSL警告
-requests.packages.urllib3.disable_warnings()  # type: ignore
+urllib3.disable_warnings()
 
 load_dotenv()
 

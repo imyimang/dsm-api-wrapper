@@ -79,10 +79,10 @@ def register_routes(app, session_manager, requests_session, config, utils):
         active_sessions = len([s for s in sessions_info if not s['is_expired']])
         
         api_docs = {
-            "title": "SimpleNAS Flask API Server",
+            "title": "DSM Flask API Server",
             "description": "簡易的 Synology NAS 管理 API - 支援多用戶",
             "version": "2.0.0",
-            "author": "SimpleNAS Project",
+            "author": "yimang",
             "system_info": {
                 "total_sessions": len(sessions_info),
                 "active_sessions": active_sessions,

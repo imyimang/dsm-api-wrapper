@@ -5,7 +5,7 @@ import os
 from datetime import datetime, timedelta
 from io import BytesIO
 
-class SimpleNASApiTester:
+class DSMApiTester:
     def __init__(self, config_file="config.json"):
         self.config_file = config_file
         self.config = self.load_config()
@@ -77,31 +77,31 @@ class SimpleNASApiTester:
             print(f"   詳細: {data}")
     
     def check_server_connection(self):
-        """檢查服務器連線"""
-        print("🔗 檢查服務器連線...")
+        """檢查伺服器連線"""
+        print("🔗 檢查伺服器連線...")
         try:
             timeout = self.config['NAS']['NAS_TIMEOUT']
             response = self.session.get(f"{self.base_url}/", timeout=timeout)
             if response.status_code == 200:
                 data = response.json()
                 self.log_test(
-                    "服務器連線", 
+                    "伺服器連線", 
                     True, 
-                    f"連線成功 - {data.get('title', 'SimpleNAS API')}"
+                    f"連線成功 - {data.get('title', 'DSM API')}"
                 )
                 return True
             else:
-                self.log_test("服務器連線", False, f"HTTP 狀態碼: {response.status_code}")
+                self.log_test("伺服器連線", False, f"HTTP 狀態碼: {response.status_code}")
                 return False
         except requests.exceptions.ConnectionError:
             self.log_test(
-                "服務器連線", 
+                "伺服器連線", 
                 False, 
-                f"無法連接到服務器，請確認服務器是否運行在 {self.base_url}"
+                f"無法連接到伺服器，請確認伺服器是否運行在 {self.base_url}"
             )
             return False
         except Exception as e:
-            self.log_test("服務器連線", False, f"連線錯誤: {str(e)}")
+            self.log_test("伺服器連線", False, f"連線錯誤: {str(e)}")
             return False
 
     def test_health_check(self):
@@ -1061,12 +1061,12 @@ class SimpleNASApiTester:
     
     def run_complete_test_suite(self):
         """執行完整測試套件"""
-        print("🎯 SimpleNAS API 完整測試套件")
+        print("🎯 DSM API 完整測試套件")
         print("="*60)
         
-        # 檢查服務器連線
+        # 檢查伺服器連線
         if not self.check_server_connection():
-            print("❌ 無法連接到服務器，測試中止")
+            print("❌ 無法連接到伺服器，測試中止")
             return False
         
         all_results = []
@@ -1134,12 +1134,12 @@ class SimpleNASApiTester:
         print("\n" + "="*60)
         
         if failed == 0:
-            print("🎉 所有測試都通過了！API 服務器運作正常。")
+            print("🎉 所有測試都通過了！API 伺服器運作正常。")
         else:
-            print("⚠️ 有部分測試失敗，請檢查服務器狀態和配置。")
+            print("⚠️ 有部分測試失敗，請檢查伺服器狀態和配置。")
 
 def main():
-    print("🧪 SimpleNAS Flask API 完整測試工具")
+    print("🧪 DSM Flask API 完整測試工具")
     print("基於 API.md 文檔和 config.json 配置進行全面測試")
     print("-" * 60)
     
@@ -1151,7 +1151,7 @@ def main():
         return
     
     try:
-        tester = SimpleNASApiTester(config_file)
+        tester = DSMApiTester(config_file)
     except SystemExit:
         return
     
