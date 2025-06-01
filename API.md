@@ -69,7 +69,7 @@
       "success": true,
       "sid": "Synology_DSM_Session_ID",
       "syno_token": "Synology_CSRF_Token",
-      "session_id": "DSM_internal_session_id"
+      "session_id": "simpleNAS_internal_session_id"
   }
   ```
 - **失敗回應** (400 Bad Request / 500 Internal Server Error):
@@ -90,7 +90,7 @@
       "success": true,
       "logged_in": true,
       "account": "current_logged_in_username",
-      "session_id": "DSM_internal_session_id_prefix...",
+      "session_id": "simpleNAS_internal_session_id_prefix...",
       "login_time": "YYYY-MM-DD HH:MM:SS",
       "last_activity": "YYYY-MM-DD HH:MM:SS",
       "expires_at": "YYYY-MM-DD HH:MM:SS"
