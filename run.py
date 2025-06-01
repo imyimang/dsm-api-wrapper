@@ -1,20 +1,15 @@
+import json
 from server import app
-from server import session_manager,Config
+
+with open("config.json", "r", encoding="utf-8") as f:
+    config_data = json.load(f)
+
+HOST = config_data["FLASK"]["HOST"]
+PORT = config_data["FLASK"]["PORT"]
+DEBUG = config_data["FLASK"]["DEBUG"]
 
 if __name__ == '__main__':
     print("=== SimpleNAS Flask API Server ===")
     print("伺服器啟動中...")
-    print("網頁介面: http://127.0.0.1:5000/app")
-    print("API 文檔: http://127.0.0.1:5000/")
-    print(f"Session 檔案: {Config.SESSION_FILE}")
-    print(f"Session 過期時間: {Config.SESSION_EXPIRE_DAYS} 天")
-    print("=====================================")
-    
-    # 顯示現有 sessions 資訊
-    sessions_info = session_manager.get_all_sessions_info()
-    if sessions_info:
-        print(f"現有 Sessions: {len(sessions_info)} 個")
-        for info in sessions_info:
-            print(f"  - {info['session_id']} ({info['account']}) - 最後活動: {info['last_activity']}")
-    
-    app.run(host='0.0.0.0', port=5000, debug=True)
+    print(f"伺服器地址: http://{HOST}:{PORT}")
+    app.run(host=HOST, port=PORT, debug=DEBUG)

@@ -5,11 +5,50 @@
 ## 總覽
 
 - **基礎 URL**：所有 API 請求的基礎 URL 預設為執行服務器的主機和端口。
-- **認證**：除了 `/api/login` 和 `/api/status` (未登入時)，所有 API 請求都需要在 Header 中傳遞有效的 `session_id` (通常由客戶端自動處理，例如通過 Cookie)。部分直接與 Synology NAS 通信的 API 會使用內部管理的 `_sid` 和 `SynoToken`。
+- **認證**：除了 `/api/login`、`/api/status` (未登入時) 和 `/health`，所有 API 請求都需要在 Header 中傳遞有效的 `session_id` (通常由客戶端自動處理，例如通過 Cookie)。部分直接與 Synology NAS 通信的 API 會使用內部管理的 `_sid` 和 `SynoToken`。
 - **請求格式**：POST 請求的 Body 應為 JSON 格式，`Content-Type` 設為 `application/json`。檔案上傳使用 `multipart/form-data`。
 - **回應格式**：所有 API 回應均為 JSON 格式。成功的回應通常包含 `"success": true`，失敗則包含 `"success": false` 和一個 `error` 訊息。
 
 ## API 端點
+
+### 系統監控 (System Monitoring)
+
+#### 1. 健康檢查
+
+- **Endpoint**: `GET /health`
+- **說明**: 檢查系統健康狀態，包含服務狀態、配置檔案狀態、Session 統計等資訊。無需身份驗證。
+- **成功回應** (200 OK):
+  ```json
+  {
+      "status": "healthy",
+      "timestamp": "2024-06-01T10:30:00.000Z",
+      "version": "2.0.0",
+      "uptime": "運行中",
+      "system_checks": {
+          "config_file": "OK",
+          "session_file": "OK",
+          "nas_base_url": "https://your-nas.com:5001/webapi/entry.cgi",
+          "session_expire_days": 365
+      },
+      "session_stats": {
+          "total_sessions": 5,
+          "active_sessions": 2,
+          "expired_sessions": 3
+      },
+      "services": {
+          "flask": "running",
+          "session_manager": "running",
+          "requests_session": "running"
+      }
+  }
+  ```
+- **失敗回應** (500 Internal Server Error):
+  ```json
+  {
+      "success": false,
+      "error": "無法檢查系統健康狀態"
+  }
+  ```
 
 ### 身份驗證 (Authentication)
 
@@ -371,4 +410,4 @@ HTTP 狀態碼也會反映錯誤的類型：
 ## 注意事項
 -   `session_id` 的管理：用戶端應妥善保存和傳輸 `session_id`，通常透過瀏覽器的 Cookie 機制自動處理。
 -   路徑格式：所有檔案和資料夾路徑應使用 Synology NAS 的標準格式 (例如 `/home`, `/photo/MyAlbum`)。
--   Synology API 依賴：本系統許多功能依賴 Synology NAS 提供的 API。若 NAS API 行為變更或不可用，可能會影響本系統功能。 
+-   Synology API 依賴：本系統許多功能依賴 Synology NAS 提供的 API。若 NAS API 行為變更或不可用，可能會影響本系統功能。

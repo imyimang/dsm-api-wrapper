@@ -2,8 +2,8 @@ from flask import Flask, session
 import requests
 import json
 import time
-import hashlib
 import os
+from dotenv import load_dotenv
 import uuid
 from datetime import datetime, timedelta
 from router import register_routes
@@ -11,15 +11,20 @@ from router import register_routes
 # 禁用SSL警告
 requests.packages.urllib3.disable_warnings()  # type: ignore
 
+load_dotenv()
+
+with open("config.json", "r", encoding="utf-8") as f:
+    config_data = json.load(f)
+
 app = Flask(__name__, static_folder='.')
-app.secret_key = 'your-secret-key-change-this-in-production'  # 用於 Flask session
+app.secret_key = os.getenv("FLASK_SECRET_KEY")  # 用於 Flask session
 
 # 簡易設定
 class Config:
-    NAS_BASE_URL = "https://cwds.taivs.tp.edu.tw:5001/webapi/entry.cgi"
-    NAS_TIMEOUT = 30
-    SESSION_FILE = "session.json"
-    SESSION_EXPIRE_DAYS = 365  # 預設一年過期
+    NAS_BASE_URL = config_data["NAS"]["NAS_BASE_URL"] 
+    NAS_TIMEOUT = config_data["NAS"]["NAS_TIMEOUT"]
+    SESSION_FILE = config_data["SESSION"]["SESSION_FILE"] 
+    SESSION_EXPIRE_DAYS = config_data["SESSION"]["SESSION_EXPIRE_DAYS"] 
 
 # Session 管理類別
 class SessionManager:
@@ -34,6 +39,10 @@ class SessionManager:
             try:
                 with open(self.session_file, 'r', encoding='utf-8') as f:
                     data = json.load(f)
+                    # 確保 data 是字典類型
+                    if not isinstance(data, dict):
+                        print(f"[WARNING] Session 檔案格式錯誤，重新初始化")
+                        return {}
                     # 清理過期的 sessions
                     self.cleanup_expired_sessions(data)
                     return data
@@ -44,6 +53,10 @@ class SessionManager:
     def save_sessions(self):
         """儲存 sessions 到檔案"""
         try:
+            # 確保 self.sessions 是字典
+            if not isinstance(self.sessions, dict):
+                self.sessions = {}
+            
             with open(self.session_file, 'w', encoding='utf-8') as f:
                 json.dump(self.sessions, f, indent=2, ensure_ascii=False)
         except IOError as e:
@@ -54,11 +67,18 @@ class SessionManager:
         if sessions is None:
             sessions = self.sessions
         
+        # 確保 sessions 是字典類型
+        if not isinstance(sessions, dict):
+            print(f"[WARNING] Sessions 資料類型錯誤，重新初始化")
+            if sessions is None:
+                self.sessions = {}
+            return
+        
         current_time = time.time()
         expired_sessions = []
         
         for session_id, session_data in sessions.items():
-            if session_data.get('expires_at', 0) < current_time:
+            if isinstance(session_data, dict) and session_data.get('expires_at', 0) < current_time:
                 expired_sessions.append(session_id)
         
         for session_id in expired_sessions:
@@ -75,13 +95,17 @@ class SessionManager:
 
     def get_user_session(self, session_id=None):
         """獲取用戶的 session 資料"""
+        # 確保 self.sessions 是字典
+        if not isinstance(self.sessions, dict):
+            self.sessions = {}
+        
         if session_id is None:
             session_id = self.get_current_user_session_id()
         
         user_session = self.sessions.get(session_id, {})
         
         # 檢查是否過期
-        if user_session and user_session.get('expires_at', 0) < time.time():
+        if user_session and isinstance(user_session, dict) and user_session.get('expires_at', 0) < time.time():
             self.remove_session(session_id)
             return {}
         
@@ -89,6 +113,10 @@ class SessionManager:
 
     def set_user_session(self, session_data, session_id=None):
         """設定用戶的 session 資料"""
+        # 確保 self.sessions 是字典
+        if not isinstance(self.sessions, dict):
+            self.sessions = {}
+        
         if session_id is None:
             session_id = self.get_current_user_session_id()
         
@@ -103,6 +131,11 @@ class SessionManager:
 
     def remove_session(self, session_id=None):
         """移除用戶的 session"""
+        # 確保 self.sessions 是字典
+        if not isinstance(self.sessions, dict):
+            self.sessions = {}
+            return
+        
         if session_id is None:
             session_id = self.get_current_user_session_id()
         
@@ -113,25 +146,39 @@ class SessionManager:
     def is_logged_in(self, session_id=None):
         """檢查用戶是否已登入"""
         user_session = self.get_user_session(session_id)
-        return (user_session.get('sid') is not None and 
+        return (isinstance(user_session, dict) and 
+                user_session.get('sid') is not None and 
                 user_session.get('syno_token') is not None)
 
     def update_last_activity(self, session_id=None):
         """更新最後活動時間"""
+        # 確保 self.sessions 是字典
+        if not isinstance(self.sessions, dict):
+            self.sessions = {}
+            return
+        
         if session_id is None:
             session_id = self.get_current_user_session_id()
         
-        if session_id in self.sessions:
+        if session_id in self.sessions and isinstance(self.sessions[session_id], dict):
             self.sessions[session_id]['last_activity'] = time.time()
             self.save_sessions()
 
     def get_all_sessions_info(self):
         """獲取所有 sessions 的資訊（用於調試）"""
+        # 確保 self.sessions 是字典
+        if not isinstance(self.sessions, dict):
+            self.sessions = {}
+            return []
+        
         info = []
         for session_id, session_data in self.sessions.items():
+            if not isinstance(session_data, dict):
+                continue
+                
             info.append({
                 'session_id': session_id[:8] + '...',
-                'account': session_data.get('credentials', {}).get('account', 'Unknown'),
+                'account': session_data.get('credentials', {}).get('account', 'Unknown') if isinstance(session_data.get('credentials'), dict) else 'Unknown',
                 'login_time': datetime.fromtimestamp(session_data.get('login_time', 0)).strftime('%Y-%m-%d %H:%M:%S') if session_data.get('login_time') else 'Unknown',
                 'last_activity': datetime.fromtimestamp(session_data.get('last_activity', 0)).strftime('%Y-%m-%d %H:%M:%S') if session_data.get('last_activity') else 'Unknown',
                 'expires_at': datetime.fromtimestamp(session_data.get('expires_at', 0)).strftime('%Y-%m-%d %H:%M:%S') if session_data.get('expires_at') else 'Unknown',
@@ -141,11 +188,13 @@ class SessionManager:
 
 # 初始化 Session 管理器
 session_manager = SessionManager(Config.SESSION_FILE, Config.SESSION_EXPIRE_DAYS)
+# 啟動時清理過期 sessions
+session_manager.cleanup_expired_sessions()
+session_manager.save_sessions()
 
 # 建立requests session
 requests_session = requests.Session()
 requests_session.verify = False
-requests_session.timeout = Config.NAS_TIMEOUT  # type: ignore
 
 # 工具類別
 class Utils:
@@ -153,6 +202,7 @@ class Utils:
         self.session_manager = session_manager
         self.requests_session = requests_session
         self.config = config
+        self.timeout = (10, config.NAS_TIMEOUT)
 
     def string_to_hex(self, input_string):
         """將字串轉換為十六進制"""
@@ -192,7 +242,11 @@ class Utils:
             "client": "browser"
         }
         
-        response = self.requests_session.get(self.config.NAS_BASE_URL, params=login_params)
+        response = self.requests_session.get(
+            self.config.NAS_BASE_URL,
+            params=login_params,
+            timeout=self.timeout
+        )
         response.raise_for_status()
         
         result = response.json()
@@ -313,22 +367,3 @@ utils = Utils(session_manager, requests_session, Config)
 
 # 註冊路由
 register_routes(app, session_manager, requests_session, Config, utils)
-
-if __name__ == '__main__':
-    print("=== SimpleNAS Flask API Server ===")
-    print("伺服器啟動中...")
-    print("網頁介面: http://127.0.0.1:5000/app")
-    print("API 文檔: http://127.0.0.1:5000/")
-    print(f"Session 檔案: {Config.SESSION_FILE}")
-    print(f"Session 過期時間: {Config.SESSION_EXPIRE_DAYS} 天")
-    print("=====================================")
-    
-    # 顯示現有 sessions 資訊
-    sessions_info = session_manager.get_all_sessions_info()
-    if sessions_info:
-        print(f"現有 Sessions: {len(sessions_info)} 個")
-        for info in sessions_info:
-            print(f"  - {info['session_id']} ({info['account']}) - 最後活動: {info['last_activity']}")
-    
-    app.run(host='127.0.0.1', port=5000, debug=True)
-

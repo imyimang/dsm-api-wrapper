@@ -3,10 +3,72 @@ import datetime
 import time
 import json
 from io import BytesIO
+import os
 
 def register_routes(app, session_manager, requests_session, config, utils):
     """註冊所有路由"""
     
+    # ============= 健康檢查路由 =============
+    
+    @app.route('/health', methods=['GET'])
+    def health_check():
+        """健康檢查端點"""
+        try:
+            # 檢查系統狀態
+            sessions_info = session_manager.get_all_sessions_info()
+            active_sessions = len([s for s in sessions_info if not s['is_expired']])
+            
+            # 檢查配置檔案
+            config_status = "OK"
+            try:
+                with open("config.json", "r", encoding="utf-8") as f:
+                    json.load(f)
+            except:
+                config_status = "ERROR"
+            
+            # 檢查 session 檔案
+            session_file_status = "OK"
+            try:
+                if os.path.exists(config.SESSION_FILE):
+                    with open(config.SESSION_FILE, "r", encoding="utf-8") as f:
+                        json.load(f)
+                else:
+                    session_file_status = "NOT_FOUND"
+            except:
+                session_file_status = "ERROR"
+            
+            health_data = {
+                "status": "healthy",
+                "timestamp": datetime.datetime.now().isoformat(),
+                "version": "2.0.0",
+                "uptime": "運行中",
+                "system_checks": {
+                    "config_file": config_status,
+                    "session_file": session_file_status,
+                    "nas_base_url": config.NAS_BASE_URL,
+                    "session_expire_days": config.SESSION_EXPIRE_DAYS
+                },
+                "session_stats": {
+                    "total_sessions": len(sessions_info),
+                    "active_sessions": active_sessions,
+                    "expired_sessions": len(sessions_info) - active_sessions
+                },
+                "services": {
+                    "flask": "running",
+                    "session_manager": "running",
+                    "requests_session": "running"
+                }
+            }
+            
+            return jsonify(health_data), 200
+            
+        except Exception as e:
+            return jsonify({
+                "status": "unhealthy",
+                "timestamp": datetime.datetime.now().isoformat(),
+                "error": str(e)
+            }), 500
+
     # ============= 主頁和應用程式路由 =============
     
     @app.route('/', methods=['GET'])
@@ -32,6 +94,11 @@ def register_routes(app, session_manager, requests_session, config, utils):
                 "description": "網頁版 NAS 管理介面 (完整功能含分享)"
             },
             "endpoints": {
+                "System": {
+                    "GET /health": "系統健康檢查",
+                    "GET /": "API 總覽文件",
+                    "GET /app": "網頁應用程式"
+                },
                 "Authentication": {
                     "POST /api/login": "登入NAS系統 - {account, password}",
                     "POST /api/logout": "登出NAS系統",
@@ -48,7 +115,7 @@ def register_routes(app, session_manager, requests_session, config, utils):
                     "POST /api/share": "建立分享連結 - {paths, password?, date_expired?, date_available?}",
                     "POST /api/compress": "壓縮檔案 - {source_paths, dest_path, options?}"
                 },
-                "System": {
+                "Debug": {
                     "GET /api/sessions": "檢視所有 sessions (調試用)"
                 }
             },

@@ -1,0 +1,15 @@
+{
+  "NAS":{
+  "NAS_BASE_URL": "https://你的NAS網址:5001/webapi/entry.cgi",
+  "NAS_TIMEOUT": 30
+  },
+  "SESSION":{
+  "SESSION_FILE": "session.json",
+  "SESSION_EXPIRE_DAYS": 365
+  },
+  "FLASK":{
+    "HOST":"0.0.0.0",
+    "PORT": 5000,
+    "DEBUG": false
+  }
+}
