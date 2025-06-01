@@ -65,7 +65,7 @@ FLASK_SECRET_KEY=your-very-secret-key-change-this-in-production
 
 #### 設定 NAS 連線
 用記事本開啟 `config.json` 檔案，修改您的 NAS 設定：
-```json
+```jsonc
 {
   "NAS": {
     "NAS_BASE_URL": "https://你的NAS網址.com:5001/webapi/entry.cgi", //EX: "https://cwds.taivs.tp.edu.tw:5001/webapi/entry.cgi"
