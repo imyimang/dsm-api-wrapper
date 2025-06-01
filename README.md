@@ -33,7 +33,7 @@
 ## 系統架構
 
 ```
-SimpleNAS/
+DSM-API-Wrapper/
 ├── server.py          # Flask 應用程式主體與工具類別
 ├── router.py          # API 路由定義
 ├── run.py             # 啟動腳本
